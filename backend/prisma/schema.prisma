@@ -1,0 +1,777 @@
+// ============================================================
+//  Prisma Schema — Website Giao Dịch Nông Sản
+//  Đề tài: PHÁT TRIỂN WEBSITE GIAO DỊCH NÔNG SẢN GIỮA
+//          DOANH NGHIỆP VÀ NÔNG DÂN TÍCH HỢP AI GỢI Ý
+//          SẢN PHẨM VÀ ĐỐI TÁC GIAO DỊCH
+//  Database: PostgreSQL
+//  Roles: nong_dan | doanh_nghiep | admin
+//  Ghi chú: Admin là tổ chức vừa quản trị hệ thống,
+//           vừa có thể thu mua / đăng bán nông sản.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+// Đã chuyển Role thành model VaiTro
+
+enum TrangThaiTaiKhoan {
+  pending  // Chờ duyệt
+  active   // Đang hoạt động
+  locked   // Bị khoá
+}
+
+/// Trạng thái bài đăng sản phẩm của Nông Dân
+enum TrangThaiBaiDang {
+  cho_duyet    // Mới đăng, chờ kiểm tra thuật toán giá
+  dang_ban     // Giá hợp lệ, đang hiển thị công khai
+  da_ban       // Đã bán hết (so_luong_con_lai = 0)
+  an           // Ẩn tạm thời (người đăng tự ẩn)
+}
+
+/// Trạng thái đơn hàng
+enum TrangThaiDonHang {
+  cho_xac_nhan  // DN đặt, chờ Nông Dân xác nhận
+  da_xac_nhan   // Nông Dân đã xác nhận
+  dang_giao     // Đang vận chuyển
+  hoan_thanh    // Giao dịch hoàn tất
+  da_huy        // Đã huỷ (bởi DN hoặc Nông Dân)
+}
+
+/// Trạng thái thanh toán
+enum TrangThaiThanhToan {
+  chua_thanh_toan  // Chưa thanh toán
+  da_thanh_toan    // Đã thanh toán
+  hoan_tien        // Đã hoàn tiền
+  that_bai         // Giao dịch thất bại
+}
+
+/// Phương thức thanh toán
+enum PhuongThucThanhToan {
+  vnpay
+  momo
+  chuyen_khoan  // Chuyển khoản ngân hàng
+  tien_mat      // Thanh toán tiền mặt khi nhận hàng
+}
+
+/// Hình thức giao hàng
+enum HinhThucGiaoHang {
+  tu_den_lay
+  giao_tan_noi
+}
+
+/// Loại sự kiện người dùng (dữ liệu đầu vào cho AI)
+enum LoaiSuKien {
+  xem_san_pham       // Xem chi tiết bài đăng
+  tim_kiem           // Tìm kiếm sản phẩm
+  mua_hang           // Đặt hàng / mua trực tiếp
+  dat_hang           // Đặt hàng thành công
+  danh_gia           // Để lại đánh giá
+  xem_ho_so          // Xem hồ sơ Nông Dân / DN
+}
+
+/// Loại gợi ý AI
+enum LoaiGoiY {
+  san_pham_phu_hop     // Gợi ý SP phù hợp nhu cầu DN
+  doi_tac_nong_dan     // Gợi ý Nông Dân phù hợp cho DN
+  doi_tac_doanh_nghiep // Gợi ý DN tiềm năng cho Nông Dân
+  san_pham_tuong_tu    // SP tương tự (content-based)
+  theo_mua_vu          // Gợi ý theo mùa vụ
+}
+
+/// Loại thông báo
+enum LoaiThongBao {
+  don_hang    // Liên quan đến đơn hàng
+  hang_moi    // Có hàng mới phù hợp nhu cầu (thông báo cho DN)
+  thanh_toan  // Liên quan đến thanh toán
+  bai_dang    // Bài đăng được duyệt / bị ẩn
+  he_thong    // Thông báo hệ thống từ Admin
+  tin_nhan    // Có tin nhắn mới
+}
+
+/// Kênh gửi thông báo
+enum KenhThongBao {
+  app   // In-app notification
+  sms
+  zalo
+  email
+}
+
+/// Loại báo cáo / khiếu nại
+enum LoaiBaoCao {
+  san_pham_gia_mao   // SP không đúng mô tả
+  lua_dao            // Nghi ngờ gian lận
+  noi_dung_khong_phu_hop
+  khac
+}
+
+enum TrangThaiBaoCao {
+  cho_xu_ly
+  dang_xu_ly
+  da_xu_ly
+  dong_lai
+}
+
+// ─────────────────────────────────────────────
+// MODULE 0: VAI TRÒ (VAI_TRO)
+// ─────────────────────────────────────────────
+
+model VaiTro {
+  role_id     Int      @id @default(autoincrement())
+  ten_vai_tro String   @unique @db.VarChar(50) // nong_dan, doanh_nghiep, admin
+  mo_ta       String?  @db.Text
+  users       Users[]
+
+  @@map("vai_tro")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 1: NGƯỜI DÙNG (USERS) - Lớp Tổng Quát
+// Dùng chung cho cả 3 role: nong_dan, doanh_nghiep, admin
+// ─────────────────────────────────────────────
+
+model Users {
+  user_id       Int      @id @default(autoincrement())
+  email         String?  @unique @db.VarChar(150)
+  phone         String?  @unique @db.VarChar(15)
+  password_hash String   @db.VarChar(255)
+  full_name     String   @db.VarChar(150)
+  role_id       Int
+  avatar_url    String?  @db.Text
+  ngay_sinh     DateTime? @db.Date
+  gioi_tinh     String?   @db.VarChar(10)
+  is_verified   Boolean  @default(false)
+  is_active     Boolean  @default(true)
+  reset_password_otp     String?   @db.VarChar(10)
+  reset_password_expires DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Foreign keys
+  vaiTro        VaiTro   @relation(fields: [role_id], references: [role_id])
+
+  // Relations 1-1 (Lớp chuyên biệt)
+  nongDan         NongDan?
+  doanhNghiep     DoanhNghiep?
+
+  // Relations Hệ Thống 1-N (Sử dụng chung cho tất cả các role)
+  danhGiaDua     DanhGia[]        @relation("nguoiDanhGia")
+  danhGiaNhan    DanhGia[]        @relation("nguoiDuocDanhGia")
+  tinNhanGui     TinNhan[]        @relation("nguoiGui")
+  tinNhanNhan    TinNhan[]        @relation("nguoiNhan")
+  thongBaos      ThongBao[]
+  aiEvents       AiEvents[]
+  aiGoiYNhan     AiGoiY[]         @relation("nguoiNhan")
+  baoCaoDua      BaoCao[]         @relation("nguoiBaoCao")
+  baoCaoNhan     BaoCao[]         @relation("nguoiBiBC")
+  diaChiLuus     DiaChiLuu[]
+  gioHangs       GioHang[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 2: NÔNG DÂN - Lớp Chuyên Biệt
+// Thông tin và nghiệp vụ của tác nhân Nông Dân
+// ─────────────────────────────────────────────
+
+model NongDan {
+  user_id         Int      @id
+  ho_ten          String   @db.VarChar(150)
+  so_cmnd_cccd    String?  @unique @db.VarChar(20)
+  tinh_thanh      String   @db.VarChar(100)
+  huyen_xa        String?  @db.VarChar(100)
+  dia_chi_cu_the  String?  @db.Text
+  latitude        Decimal? @db.Decimal(10, 8)
+  longitude       Decimal? @db.Decimal(11, 8)
+  dien_tich_ha    Decimal? @db.Decimal(8, 2)
+  nong_san_chinh  String?  @db.VarChar(200)
+  chung_nhan      String?  @db.VarChar(100)
+
+  /// Bổ sung từ form đăng ký
+  so_dien_thoai   String?  @db.VarChar(15)
+  email_lien_he   String?  @db.VarChar(150)
+  giay_phep_urls  Json?    // Mảng URL giấy tờ, chứng nhận
+  mo_ta_ban_than  String?  @db.Text
+
+  /// Thông tin kinh doanh bổ sung
+  ma_so_thue             String?  @unique @db.VarChar(20)
+  ten_co_so_kd           String?  @db.VarChar(200)
+  doi_tuong_dang_ky      String?  @db.VarChar(100)
+  thong_tin_xuat_hoa_don Json?
+
+  diem_trung_binh Decimal  @default(0) @db.Decimal(3, 2)
+  tong_giao_dich  Int      @default(0)
+  trang_thai      TrangThaiTaiKhoan @default(pending)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  user            Users    @relation(fields: [user_id], references: [user_id])
+
+  baiDangs        BaiDang[]
+  donHangBan      DonHang[]        @relation("nguoiBan")
+
+  @@map("nong_dan")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 3: DOANH NGHIỆP - Lớp Chuyên Biệt
+// Thông tin và nghiệp vụ của tác nhân Doanh Nghiệp
+// ─────────────────────────────────────────────
+
+model DoanhNghiep {
+  user_id            Int     @id
+  ten_cong_ty        String  @db.VarChar(200)
+  ma_so_thue         String? @unique @db.VarChar(20)
+  nganh_kinh_doanh   String? @db.VarChar(100)
+  tinh_thanh         String  @db.VarChar(100)
+  dia_chi            String? @db.Text
+  latitude           Decimal? @db.Decimal(10, 8)
+  longitude          Decimal? @db.Decimal(11, 8)
+  website            String?  @db.VarChar(200)
+
+  /// Bổ sung từ form đăng ký
+  so_dien_thoai      String? @db.VarChar(15)
+  email_lien_he      String? @db.VarChar(150)
+  giay_phep_kd_url   String? @db.Text
+  mo_ta              String? @db.Text
+  nguoi_dai_dien     String? @db.VarChar(150)
+  chuc_vu            String? @db.VarChar(100)
+
+  diem_trung_binh    Decimal  @default(0) @db.Decimal(3, 2)
+  tong_giao_dich     Int      @default(0)
+  trang_thai         TrangThaiTaiKhoan @default(pending)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  user               Users    @relation(fields: [user_id], references: [user_id])
+
+  donHangMua         DonHang[]        @relation("nguoiMua")
+  nhuCauThuMua       NhuCauThuMua[]
+
+  @@map("doanh_nghiep")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 3.1: NHU CẦU THU MUA - Doanh Nghiệp công khai
+// Nông dân xem và tìm đến doanh nghiệp thu mua
+// ─────────────────────────────────────────────
+
+enum TrangThaiNhuCau {
+  dang_thu_mua  // Đang mở thu mua
+  du_so_luong   // Đã đủ số lượng cần
+  tam_ngung     // Tạm ngưng thu mua
+  da_dong       // Đã đóng
+}
+
+model NhuCauThuMua {
+  nhucau_id          Int      @id @default(autoincrement())
+  /// Doanh nghiệp đăng nhu cầu
+  doanh_nghiep_id    Int
+  danhmuc_id         Int?
+  ten_nong_san       String   @db.VarChar(200)
+  mo_ta              String?  @db.Text
+  so_luong_can       Decimal  @db.Decimal(10, 2)
+  don_vi             String   @db.VarChar(20)   // kg | tấn | thùng...
+  /// Giá niêm yết tham khảo (có thể thương lượng)
+  gia_tham_khao      Decimal? @db.Decimal(12, 2)
+  cho_thuong_luong   Boolean  @default(true)
+  /// Yêu cầu chứng nhận (VietGAP, hữu cơ...)
+  yeu_cau_chung_nhan String?  @db.VarChar(100)
+  tinh_thanh_giao    String?  @db.VarChar(100)
+  dia_chi_giao       String?  @db.Text
+  /// Ngày bắt đầu và kết thúc thu mua
+  ngay_bat_dau       DateTime? @db.Date
+  ngay_ket_thuc      DateTime? @db.Date
+  trang_thai         TrangThaiNhuCau @default(dang_thu_mua)
+  luot_xem           Int      @default(0)
+  /// Admin đã thông báo cho DN về hàng mới phù hợp chưa
+  da_thong_bao       Boolean  @default(false)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  doanhNghiep        DoanhNghiep @relation(fields: [doanh_nghiep_id], references: [user_id])
+  danhMuc            DanhMuc?    @relation(fields: [danhmuc_id], references: [danhmuc_id])
+
+  @@index([trang_thai, ten_nong_san])
+  @@index([doanh_nghiep_id])
+  @@map("nhu_cau_thu_mua")
+}
+
+
+// Chỉ Admin quản lý
+// ─────────────────────────────────────────────
+
+model ChungLoai {
+  chungloai_id   Int      @id @default(autoincrement())
+  ten_chung_loai String   @db.VarChar(100)
+  slug           String   @unique @db.VarChar(100)
+  mo_ta          String?  @db.Text
+  icon_url       String?  @db.Text
+  thu_tu         Int      @default(0)
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  danhMucs       DanhMuc[]
+
+  @@map("chung_loai")
+}
+
+model DanhMuc {
+  danhmuc_id     Int      @id @default(autoincrement())
+  chungloai_id   Int?
+  ten_danh_muc   String   @db.VarChar(100)
+  slug           String   @unique @db.VarChar(100)
+  mo_ta          String?  @db.Text
+  icon_url       String?  @db.Text
+  thu_tu         Int      @default(0)
+  is_active      Boolean  @default(true)
+
+  chungLoai      ChungLoai? @relation(fields: [chungloai_id], references: [chungloai_id])
+  baiDangs       BaiDang[]
+  nhuCauThuMua   NhuCauThuMua[]
+
+  @@map("danh_muc")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 5: BÀI ĐĂNG SẢN PHẨM (BAI_DANG)
+// Nông Dân tự định giá — hệ thống kiểm tra tự động
+// ─────────────────────────────────────────────
+
+model BaiDang {
+  baidang_id       Int      @id @default(autoincrement())
+  /// Người đăng (Hồ sơ Nông Dân)
+  nguoi_dang_id    Int
+  danhmuc_id       Int
+  tieu_de          String   @db.VarChar(200)
+  mo_ta            String   @db.Text
+  ten_nong_san     String   @db.VarChar(150)
+  don_vi_tinh      String   @db.VarChar(20)  // kg | tấn | thùng | bao | trái
+  /// Số lượng ban đầu của lô hàng
+  so_luong_co      Decimal  @db.Decimal(10, 2)
+  /// Số lượng còn lại (hệ thống tự trừ sau mỗi đơn hàng hoàn thành)
+  so_luong_con_lai Decimal  @db.Decimal(10, 2)
+  so_luong_toi_thieu Decimal @default(1) @db.Decimal(10, 2)
+  /// Giá bán theo kg — do Nông Dân tự định, hệ thống kiểm tra bất thường
+  gia_per_kg       Decimal  @db.Decimal(12, 2)
+  tinh_thanh       String   @db.VarChar(100)
+  dia_chi_lay_hang String?  @db.Text
+  latitude         Decimal? @db.Decimal(10, 8)
+  longitude        Decimal? @db.Decimal(11, 8)
+  ngay_thu_hoach   DateTime? @db.Date
+  han_su_dung      DateTime? @db.Date
+  images           Json?    // Mảng URL ảnh sản phẩm
+  video_url        String?  @db.Text
+  is_seasonal      Boolean  @default(false)
+
+  /// ── Trạng thái bài đăng ──
+  /// cho_duyet: mới đăng, chờ thuật toán kiểm tra giá
+  /// dang_ban: giá hợp lệ, hiển thị công khai
+  /// da_ban: so_luong_con_lai = 0, tự động chuyển
+  /// an: người đăng tự ẩn
+  trang_thai       TrangThaiBaiDang @default(cho_duyet)
+
+  /// Thời điểm thuật toán kiểm tra giá (NULL = chưa kiểm tra)
+  checked_at       DateTime?
+
+  /// Admin từ chối / ẩn bài vì nội dung không hợp lệ
+  ly_do_tu_choi    String?  @db.Text
+
+  luot_xem         Int      @default(0)
+  diem_trung_binh  Decimal  @default(0) @db.Decimal(3, 2)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  nguoiDang        NongDan  @relation(fields: [nguoi_dang_id], references: [user_id])
+  danhMuc          DanhMuc     @relation(fields: [danhmuc_id], references: [danhmuc_id])
+  donHangs         DonHang[]
+  danhGias         DanhGia[]
+  aiEvents         AiEvents[]
+  aiGoiYs          AiGoiY[]
+  phanLoais        PhanLoaiSanPham[]
+  gioHangs         GioHang[]
+  tieuChuans       TieuChuan[]
+
+  @@index([danhmuc_id, trang_thai])
+  @@index([tinh_thanh, trang_thai])
+  @@index([nguoi_dang_id])
+  @@map("bai_dang")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 6: PHÂN LOẠI SẢN PHẨM (PHAN_LOAI_SAN_PHAM)
+// ─────────────────────────────────────────────
+
+model PhanLoaiSanPham {
+  phanloai_id      Int      @id @default(autoincrement())
+  baidang_id       Int
+  ten_phan_loai    String   @db.VarChar(100)
+  gia              Decimal  @db.Decimal(12, 2)
+  so_luong_co      Decimal  @db.Decimal(10, 2)
+  so_luong_con_lai Decimal  @db.Decimal(10, 2)
+
+  baiDang          BaiDang  @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+  donHangChiTiets  DonHangChiTiet[]
+  gioHangs         GioHang[]
+
+  @@map("phan_loai_san_pham")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 6.1: TIÊU CHUẨN NÔNG SẢN (TIEU_CHUAN)
+// ─────────────────────────────────────────────
+
+model TieuChuan {
+  tieuchuan_id     Int       @id @default(autoincrement())
+  ten_tieu_chuan   String    @unique @db.VarChar(100)
+  mo_ta            String?   @db.Text
+  icon_url         String?   @db.Text
+  created_at       DateTime  @default(now())
+
+  baiDangs         BaiDang[]
+
+  @@map("tieu_chuan")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 7: GIỎ HÀNG (GIO_HANG)
+// ─────────────────────────────────────────────
+
+model GioHang {
+  id               Int      @id @default(autoincrement())
+  user_id          Int
+  baidang_id       Int
+  phanloai_id      Int
+  so_luong         Decimal  @db.Decimal(10, 2)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  user             Users           @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  baiDang          BaiDang         @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+  phanLoai         PhanLoaiSanPham @relation(fields: [phanloai_id], references: [phanloai_id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("gio_hang")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 8: ĐƠN HÀNG (DON_HANG)
+// ─────────────────────────────────────────────
+
+model DonHang {
+  donhang_id       Int      @id @default(autoincrement())
+  /// Người mua (Hồ sơ Doanh nghiệp)
+  nguoi_mua_id     Int
+  /// Người bán (Hồ sơ Nông Dân)
+  nguoi_ban_id     Int
+  baidang_id       Int
+  ma_don_hang      String   @unique @db.VarChar(50)
+  /// Tổng tiền = SUM(so_luong × don_gia của DonHangChiTiet)
+  tong_tien        Decimal  @db.Decimal(15, 2)
+  /// Địa chỉ giao hàng
+  dia_chi_giao     String   @db.Text
+  tinh_thanh_giao  String   @db.VarChar(100)
+  
+  /// Thông tin vận chuyển mới
+  hinh_thuc_giao_hang HinhThucGiaoHang @default(giao_tan_noi)
+  khoang_cach      Decimal? @db.Decimal(10, 2)
+  phi_van_chuyen   Decimal? @db.Decimal(15, 2)
+  tien_coc         Decimal? @db.Decimal(15, 2)
+  ma_xac_nhan      String?  @db.VarChar(50) // OTP / Mã QR xác nhận
+  
+  phuong_thuc_tt   PhuongThucThanhToan?
+  trang_thai_tt    TrangThaiThanhToan @default(chua_thanh_toan)
+  trang_thai_don   TrangThaiDonHang   @default(cho_xac_nhan)
+  ghi_chu          String?  @db.Text
+  /// Lý do huỷ (nếu bị huỷ)
+  ly_do_huy        String?  @db.Text
+  ngay_tao         DateTime @default(now())
+  ngay_xac_nhan    DateTime?
+  ngay_giao_du_kien DateTime?
+  ngay_hoan_thanh  DateTime?
+  updated_at       DateTime @updatedAt
+
+  nguoiMua         DoanhNghiep @relation("nguoiMua", fields: [nguoi_mua_id], references: [user_id])
+  nguoiBan         NongDan     @relation("nguoiBan", fields: [nguoi_ban_id], references: [user_id])
+  baiDang          BaiDang         @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+  chiTiets         DonHangChiTiet[]
+  thanhToan        ThanhToan?
+  danhGia          DanhGia?
+  tinNhans         TinNhan[]
+
+  @@index([nguoi_mua_id, trang_thai_don])
+  @@index([nguoi_ban_id, trang_thai_don])
+  @@map("don_hang")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 8.1: CHI TIẾT ĐƠN HÀNG (DON_HANG_CHI_TIET)
+// ─────────────────────────────────────────────
+
+model DonHangChiTiet {
+  id               Int      @id @default(autoincrement())
+  donhang_id       Int
+  phanloai_id      Int
+  so_luong         Decimal  @db.Decimal(10, 2)
+  don_gia          Decimal  @db.Decimal(12, 2)
+  thanh_tien       Decimal  @db.Decimal(15, 2)
+
+  donHang          DonHang         @relation(fields: [donhang_id], references: [donhang_id], onDelete: Cascade)
+  phanLoai         PhanLoaiSanPham @relation(fields: [phanloai_id], references: [phanloai_id], onDelete: Cascade)
+
+  @@map("don_hang_chi_tiet")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 9: THANH TOÁN (THANH_TOAN)
+// ─────────────────────────────────────────────
+
+model ThanhToan {
+  thanhtoan_id  Int      @id @default(autoincrement())
+  donhang_id    Int      @unique
+  so_tien       Decimal  @db.Decimal(15, 2)
+  phuong_thuc   PhuongThucThanhToan
+  /// Mã giao dịch từ cổng thanh toán
+  ma_gd_cong    String?  @unique @db.VarChar(100)
+  trang_thai    TrangThaiThanhToan @default(chua_thanh_toan)
+  thoi_gian_tt  DateTime?
+  /// Payload webhook từ VNPAY / MoMo
+  metadata      Json?
+  created_at    DateTime @default(now())
+
+  donHang       DonHang  @relation(fields: [donhang_id], references: [donhang_id], onDelete: Cascade)
+
+  @@map("thanh_toan")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 10: ĐÁNH GIÁ SAU GIAO DỊCH (DANH_GIA)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model DanhGia {
+  danhgia_id       Int      @id @default(autoincrement())
+  donhang_id       Int      @unique
+  baidang_id       Int
+  /// Người để lại đánh giá
+  nguoi_danhgia_id Int
+  /// Người được đánh giá
+  nguoi_duoc_dg_id Int
+  /// Điểm tổng thể (1-5)
+  diem_tong        Int      @db.SmallInt
+  /// Điểm chất lượng sản phẩm (1-5)
+  diem_chat_luong  Int?     @db.SmallInt
+  /// Điểm đúng hẹn giao hàng (1-5)
+  diem_dung_hen    Int?     @db.SmallInt
+  /// Điểm thái độ / giao tiếp (1-5)
+  diem_thai_do     Int?     @db.SmallInt
+  nhan_xet         String?  @db.Text
+  images           Json?
+  /// Người được đánh giá có thể trả lời
+  tra_loi          String?  @db.Text
+  created_at       DateTime @default(now())
+
+  donHang          DonHang  @relation(fields: [donhang_id], references: [donhang_id], onDelete: Cascade)
+  baiDang          BaiDang  @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+  nguoiDanhGia     Users    @relation("nguoiDanhGia",    fields: [nguoi_danhgia_id], references: [user_id])
+  nguoiDuocDanhGia Users    @relation("nguoiDuocDanhGia", fields: [nguoi_duoc_dg_id],  references: [user_id])
+
+  @@map("danh_gia")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 11: TIN NHẮN NỘI BỘ (TIN_NHAN)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model TinNhan {
+  tinnhan_id    Int      @id @default(autoincrement())
+  nguoi_gui_id  Int
+  nguoi_nhan_id Int
+  /// Tin nhắn thuộc đơn hàng nào (nếu có)
+  donhang_id    Int?
+  noi_dung      String   @db.Text
+  attachments   Json?    // Ảnh, file đính kèm
+  da_doc        Boolean  @default(false)
+  thoi_gian     DateTime @default(now())
+
+  nguoiGui      Users    @relation("nguoiGui",  fields: [nguoi_gui_id],  references: [user_id])
+  nguoiNhan     Users    @relation("nguoiNhan", fields: [nguoi_nhan_id], references: [user_id])
+  donHang       DonHang? @relation(fields: [donhang_id], references: [donhang_id], onDelete: Cascade)
+
+  @@index([nguoi_gui_id, nguoi_nhan_id])
+  @@map("tin_nhan")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 12: THÔNG BÁO (THONG_BAO)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model ThongBao {
+  tb_id         Int      @id @default(autoincrement())
+  user_id       Int
+  loai          LoaiThongBao
+  tieu_de       String   @db.VarChar(200)
+  noi_dung      String   @db.Text
+  /// ID tham chiếu tuỳ loại (donhang_id, baidang_id, nhucau_id...)
+  ref_id        Int?
+  ref_type      String?  @db.VarChar(50)
+  kenh          KenhThongBao @default(app)
+  da_doc        Boolean  @default(false)
+  thoi_gian_gui DateTime @default(now())
+
+  user          Users    @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id, da_doc])
+  @@map("thong_bao")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 13: BÁO CÁO / KHIẾU NẠI (BAO_CAO)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model BaoCao {
+  baocao_id        Int      @id @default(autoincrement())
+  /// Người gửi báo cáo
+  nguoi_baocao_id  Int
+  /// Người bị báo cáo (nếu báo cáo user)
+  nguoi_bi_bc_id   Int?
+  /// Bài đăng bị báo cáo (nếu báo cáo bài)
+  baidang_id       Int?
+  loai             LoaiBaoCao
+  mo_ta            String   @db.Text
+  bang_chung       Json?    // Mảng URL ảnh/video bằng chứng
+  trang_thai       TrangThaiBaoCao @default(cho_xu_ly)
+  /// Admin xử lý
+  xu_ly_boi        Int?
+  ghi_chu_xu_ly    String?  @db.Text
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  nguoiBaoCao      Users    @relation("nguoiBaoCao", fields: [nguoi_baocao_id], references: [user_id])
+  nguoiBiBaoCao    Users?   @relation("nguoiBiBC",   fields: [nguoi_bi_bc_id],  references: [user_id])
+
+  @@map("bao_cao")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 14: SỰ KIỆN NGƯỜI DÙNG - DỮ LIỆU AI (AI_EVENTS)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model AiEvents {
+  event_id      BigInt   @id @default(autoincrement())
+  user_id       Int
+  /// Bài đăng liên quan (nếu có)
+  baidang_id    Int?
+  loai_sk       LoaiSuKien
+  session_id    String?  @db.VarChar(100)
+  /// Thời gian xem (giây)
+  thoi_gian_xem Int?
+  /// Metadata: từ khoá tìm kiếm, filter đã dùng...
+  metadata      Json?
+  thoi_gian     DateTime @default(now())
+
+  user          Users    @relation(fields: [user_id], references: [user_id])
+  baiDang       BaiDang? @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+
+  @@index([user_id, thoi_gian])
+  @@index([baidang_id, loai_sk])
+  @@map("ai_events")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 15: GỢI Ý AI (AI_GOI_Y)
+// Hệ thống dùng chung: tham chiếu Users
+// ─────────────────────────────────────────────
+
+model AiGoiY {
+  goiy_id          Int      @id @default(autoincrement())
+  /// Người nhận gợi ý
+  nguoi_nhan_id    Int
+  loai_goiy        LoaiGoiY
+  /// Bài đăng được gợi ý (nếu loại = sản phẩm)
+  baidang_id       Int?
+  /// Người dùng được gợi ý làm đối tác (nếu loại = đối tác)
+  doi_tac_id       Int?
+  /// Điểm phù hợp [0.0000 – 1.0000]
+  diem_phu_hop     Decimal  @db.Decimal(6, 4)
+  /// Lý do gợi ý (giải thích của AI)
+  ly_do_goi_y      String?  @db.Text
+  da_click         Boolean  @default(false)
+  da_giao_dich     Boolean  @default(false)
+  phien_ban_model  String?  @db.VarChar(30)
+  thoi_gian_tao    DateTime @default(now())
+
+  nguoiNhan        Users    @relation("nguoiNhan",  fields: [nguoi_nhan_id], references: [user_id])
+  baiDang          BaiDang? @relation(fields: [baidang_id], references: [baidang_id], onDelete: Cascade)
+
+  @@index([nguoi_nhan_id, loai_goiy, thoi_gian_tao])
+  @@map("ai_goi_y")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 16: ĐỊA CHỈ LƯU (DIA_CHI_LUU)
+// ─────────────────────────────────────────────
+
+model DiaChiLuu {
+  id        Int      @id @default(autoincrement())
+  user_id   Int
+  ten_goi   String   @db.VarChar(100)
+  dia_chi   String?  @db.Text
+  latitude  Decimal  @db.Decimal(10, 8)
+  longitude Decimal  @db.Decimal(11, 8)
+  created_at DateTime @default(now())
+
+  user      Users    @relation(fields: [user_id], references: [user_id])
+  
+  @@index([user_id])
+  @@map("dia_chi_luu")
+}
+
+// ============================================================
+//  GHI CHÚ THIẾT KẾ
+// ============================================================
+//
+//  CÁC ROLE VÀ QUYỀN (THÔNG QUA BẢNG VAI_TRO):
+//  - nong_dan   : Đăng bài (BaiDang) với gia_per_kg tự định,
+//                 hệ thống kiểm tra tự động nếu giá bất thường.
+//                 Xem và liên hệ NhuCauThuMua của DN.
+//  - doanh_nghiep: Đăng NhuCauThuMua, tìm nông dân qua BaiDang,
+//                 mua theo kg (tổng tiền = so_luong × gia_per_kg).
+//  - admin      : Quản trị hệ thống, theo dõi thị trường,
+//                 thông báo cho DN khi có hàng phù hợp nhu cầu.
+//                 Có thể ẩn / xoá bài đăng vi phạm.
+//
+//  LUỒNG GIAO DỊCH MỚI:
+//  1. Nông dân đăng BaiDang (so_luong_co, gia_per_kg, mô tả...)
+//     → so_luong_con_lai = so_luong_co
+//     → trang_thai = cho_duyet
+//  2. Thuật toán kiểm tra gia_per_kg (so sánh thị trường):
+//     - Hợp lệ → trang_thai = dang_ban, checked_at = now()
+//     - Bất thường → giữ cho_duyet, thông báo nông dân điều chỉnh
+//  3. Doanh nghiệp xem bài (trang_thai = dang_ban), đặt DonHang
+//     với so_luong mong muốn (đơn vị: kg).
+//  4. Nông dân xác nhận → trang_thai_don = da_xac_nhan
+//     → Hệ thống trừ: so_luong_con_lai -= so_luong
+//     → Nếu so_luong_con_lai = 0 → trang_thai = da_ban
+//  5. Tổng tiền = so_luong × gia_per_kg (tính trực tiếp, đơn giản)
+//
+//  LIÊN KẾT:
+//  - Bảng hệ thống chung (ThongBao, TinNhan, AiEvents, BaoCao, DanhGia) trỏ về Users.
+//  - Bảng nghiệp vụ cốt lõi trỏ về NongDan / DoanhNghiep.
+//  - LichSuGia đã được XOÁ (không còn Admin định giá).
+// ============================================================
