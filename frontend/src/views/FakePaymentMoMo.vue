@@ -26,7 +26,7 @@ const handleConfirm = async (status: 'PAID' | 'CANCELLED') => {
   try {
     // 1. Cập nhật trạng thái đơn hàng
     try {
-      await OrderService.updateOrderStatus(orderId, { status: 'PAID' })
+      await OrderService.updateOrderStatus(orderId, 'PAID')
     } catch (e) {
       console.warn("Giả lập: Cập nhật trạng thái đơn hàng thành công")
     }

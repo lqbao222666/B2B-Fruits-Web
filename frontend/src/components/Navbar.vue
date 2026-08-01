@@ -4,11 +4,13 @@ import { ref, onMounted, onUnmounted } from "vue";
 import auth from "@/service/auth.ts";
 import { notify } from "@/utils/notifier.ts";
 import { Cart } from "@/service/cart.ts";
+import ThongBaoDropdown from "./ThongBaoDropdown.vue";
 
 const router = useRouter();
 const isMenuOpen = ref(false);
 const user = ref<any>(null);
 const cartCount = ref(0);
+const unreadMessageCount = ref(0);
 const searchQuery = ref("");
 const showCategoryMenu = ref(false);
 
@@ -38,23 +40,59 @@ const updateCartCount = async () => {
   }
 };
 
+import api from "@/service/api";
+
+const updateUnreadMessageCount = async () => {
+  const savedUser = localStorage.getItem("user");
+  if (!savedUser) {
+    unreadMessageCount.value = 0;
+    return;
+  }
+  try {
+    const response = await api.get("/tin-nhan/unread/count");
+    unreadMessageCount.value = response.data || 0;
+  } catch (e) {
+    unreadMessageCount.value = 0;
+  }
+};
+
+import socketService from '@/service/socket';
+
 const checkAuth = () => {
   const savedUser = localStorage.getItem("user");
   if (savedUser) {
     try {
       user.value = JSON.parse(savedUser);
       updateCartCount();
+      updateUnreadMessageCount();
+      
+      // Connect socket and set up listeners
+      socketService.connect();
+      socketService.on('new_message', () => {
+        updateUnreadMessageCount();
+        if (route.path !== '/messages') {
+          notify.info('Bạn có tin nhắn mới');
+        }
+      });
+      socketService.on('new_notification', () => {
+        // Trigger a custom event to fetch notifications if NotificationComponent is used
+        window.dispatchEvent(new Event('new-notification-received'));
+        notify.info('Bạn có thông báo mới');
+      });
     } catch (e) {
       user.value = null;
     }
   } else {
     user.value = null;
     cartCount.value = 0;
+    unreadMessageCount.value = 0;
+    socketService.disconnect();
   }
 };
 
 const handleGlobalUpdate = () => {
   updateCartCount();
+  updateUnreadMessageCount();
   checkAuth();
 };
 
@@ -72,6 +110,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("cart-updated", updateCartCount);
   window.removeEventListener("user-updated", handleGlobalUpdate);
+  socketService.disconnect();
 });
 
 const handleLogout = () => {
@@ -81,6 +120,7 @@ const handleLogout = () => {
 
   user.value = null;
   cartCount.value = 0;
+  socketService.disconnect();
   auth.logout(isAdmin ? "/login" : "/");
 };
 
@@ -100,36 +140,45 @@ const handleSearch = () => {
       <div class="topbar-inner">
         <!-- Trái: địa chỉ -->
         <div class="topbar-left">
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-          <span>Phường Ba Đình, Thành phố Hà Nội</span>
+          <div class="location-pill">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <span>Phường Ba Đình, Thành phố Hà Nội</span>
+          </div>
         </div>
 
         <!-- Giữa: link tìm hiểu -->
         <div class="topbar-center">
-          <RouterLink to="/about" class="topbar-link"
-            >Tìm hiểu về AgroMarket</RouterLink
-          >
+          <RouterLink to="/about" class="topbar-link">
+            <span class="topbar-icon">🌿</span>
+            <span>Tìm hiểu về AgroMarket</span>
+            <span class="link-sparkle">✨</span>
+          </RouterLink>
         </div>
 
         <!-- Phải: auth links -->
         <div class="topbar-right">
           <RouterLink
             to="/auth/nong-dan"
-            class="topbar-link topbar-link--highlight"
-            >Kênh người bán</RouterLink
+            class="topbar-seller-badge"
           >
+            <span>👨‍🌾</span>
+            <span>Kênh người bán</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </RouterLink>
         </div>
       </div>
     </div>
@@ -291,10 +340,18 @@ const handleSearch = () => {
               >
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
+              <div
+                v-if="unreadMessageCount > 0"
+                class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 border-2 border-white shadow-sm"
+              >
+                {{ unreadMessageCount > 99 ? '99+' : unreadMessageCount }}
+              </div>
             </div>
             <span class="action-btn-label">Tin nhắn</span>
           </RouterLink>
 
+          <!-- Thông báo -->
+          <ThongBaoDropdown v-if="user" :userId="user.user_id || user.id" />
 
           <!-- Đơn hàng -->
           <RouterLink to="/orders" class="action-btn">
@@ -584,10 +641,12 @@ const handleSearch = () => {
 
 /* =================== TOP BAR =================== */
 .topbar {
-  background-color: #1b5e20;
-  height: 36px;
+  background: linear-gradient(90deg, #064e3b 0%, #047857 45%, #0f766e 100%);
+  height: 38px;
   display: flex;
   align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12);
 }
 
 .topbar-inner {
@@ -604,55 +663,100 @@ const handleSearch = () => {
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 12px;
+}
+
+.location-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 3px 12px;
+  border-radius: 99px;
+  color: #ecfdf5;
+  font-size: 11.5px;
   font-weight: 500;
-  white-space: nowrap;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.location-pill:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-0.5px);
 }
 
 .topbar-center {
   flex: 1;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+}
+
+.topbar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  padding: 3px 14px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.topbar-link:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-0.5px);
+}
+
+.link-sparkle {
+  font-size: 10px;
+  opacity: 0.85;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
-  white-space: nowrap;
 }
 
-.topbar-link {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.topbar-link:hover {
-  color: #ffffff;
-}
-
-.topbar-link--highlight {
-  color: #a5d6a7;
+.topbar-seller-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #a7f3d0 0%, #6ee7b7 100%);
+  color: #064e3b;
+  font-size: 11.5px;
   font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 99px;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.topbar-link--highlight:hover {
+.topbar-seller-badge:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   color: #ffffff;
-}
-
-.topbar-divider {
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 11px;
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
 }
 
 /* =================== MAIN NAVBAR =================== */
 .main-navbar {
-  background: #ffffff;
-  border-bottom: 1.5px solid #e8f5e9;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(209, 250, 229, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(16, 185, 129, 0.06);
 }
 
 .main-navbar-inner {
@@ -672,21 +776,28 @@ const handleSearch = () => {
   gap: 10px;
   text-decoration: none;
   flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo-link:hover {
+  transform: translateY(-1px);
 }
 
 .logo-icon {
   width: 44px;
   height: 44px;
-  background: #e8f5e9;
+  background: linear-gradient(135deg, #ecfdf5 0%, #e0f2fe 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .logo-link:hover .logo-icon {
-  background: #2e7d32;
+  background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .logo-link:hover .logo-icon svg {
@@ -706,16 +817,19 @@ const handleSearch = () => {
 .logo-brand {
   font-size: 20px;
   font-weight: 800;
-  color: #1b5e20;
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   letter-spacing: -0.5px;
 }
 
 .logo-sub {
   font-size: 10px;
-  color: #66bb6a;
-  font-weight: 500;
+  color: #059669;
+  font-weight: 600;
   text-transform: lowercase;
   letter-spacing: 0.02em;
+  opacity: 0.85;
 }
 
 /* ---- SEARCH BLOCK ---- */
@@ -723,20 +837,18 @@ const handleSearch = () => {
   flex: 1;
   display: flex;
   align-items: center;
-  border: 1.5px solid #c8e6c9;
-  border-radius: 10px;
+  border: 1.5px solid rgba(16, 185, 129, 0.25);
+  border-radius: 12px;
   overflow: visible;
   height: 46px;
-  background: #fff;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
 .search-block:focus-within {
-  border-color: #2e7d32;
-  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.1);
+  border-color: #10b981;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
 }
 
 /* Category button */

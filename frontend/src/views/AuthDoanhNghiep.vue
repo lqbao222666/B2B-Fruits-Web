@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, useRouter, useRoute } from 'vue-router'
-import { reactive, ref, computed, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import auth from '../service/auth.ts'
 import Account from '../service/account.ts'
 import { notify } from '@/utils/notifier.ts'

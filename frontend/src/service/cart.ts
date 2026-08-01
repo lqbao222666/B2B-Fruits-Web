@@ -12,7 +12,7 @@ export const Cart = {
     return response.data
   },
 
-  async getByUser(accountId: number) {
+  async getByUser(_accountId?: number) {
     const response = await api.get(`/gio-hang`)
     return response.data
   },

@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { DonHang } from '../service/donhang.ts'
 import api from '../service/api.ts'
 import ReportModal from '../components/ReportModal.vue'
+import RatingModal from '../components/RatingModal.vue'
+import { notify } from '@/utils/notifier.ts'
 
 const router = useRouter()
 const userId = ref<number | null>(null)
@@ -14,6 +16,14 @@ const isCanceling = ref(false)
 
 const showReportModal = ref(false)
 const reportingOrder = ref<any>(null)
+
+const showRatingModal = ref(false)
+const ratingOrder = ref<any>(null)
+
+const openRatingModal = (order: any) => {
+  ratingOrder.value = order
+  showRatingModal.value = true
+}
 
 const getImageUrl = (images: any) => {
   if (Array.isArray(images) && images.length > 0) {
@@ -390,6 +400,23 @@ onMounted(() => {
             </button>
             
             <button
+              v-if="order.trang_thai_don === 'hoan_thanh' && order.nguoi_mua_id === userId && !order.danhGia"
+              @click="openRatingModal(order)"
+              class="px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-sm flex items-center gap-2"
+            >
+              <span class="material-symbols-outlined text-[18px]">rate_review</span>
+              Đánh giá
+            </button>
+
+            <span
+              v-else-if="order.trang_thai_don === 'hoan_thanh' && order.nguoi_mua_id === userId && order.danhGia"
+              class="px-4 py-2 rounded-xl text-xs font-bold bg-amber-50 border border-amber-200 text-amber-700 flex items-center gap-1"
+            >
+              <span class="material-symbols-outlined text-[16px] text-amber-500">star</span>
+              Đã đánh giá ({{ order.danhGia.diem_tong }}/5★)
+            </span>
+
+            <button
               @click="viewDetail(order.donhang_id)"
               class="px-5 py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >
@@ -414,6 +441,14 @@ onMounted(() => {
         :order="reportingOrder"
         :userId="userId"
         @close="showReportModal = false"
+        @success="fetchOrders"
+      />
+
+      <RatingModal 
+        v-if="ratingOrder"
+        :show="showRatingModal"
+        :order="ratingOrder"
+        @close="showRatingModal = false"
         @success="fetchOrders"
       />
 

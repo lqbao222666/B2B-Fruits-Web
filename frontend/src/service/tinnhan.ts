@@ -55,10 +55,16 @@ const markAsRead = async (tinnhanId: number) => {
   return res.data
 }
 
+const searchUserByPhone = async (phone: string) => {
+  const res = await api.get(`/tin-nhan/search-user/${phone}`)
+  return res.data
+}
+
 export default {
   getConversations,
   getConversation,
   sendMessage,
   uploadFile,
-  markAsRead
+  markAsRead,
+  searchUserByPhone
 }

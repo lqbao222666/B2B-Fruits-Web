@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink, useRouter, useRoute } from 'vue-router'
-import { reactive, ref, computed, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import auth from '../service/auth.ts'
 import Account from '../service/account.ts'
 import { notify } from '@/utils/notifier.ts'
@@ -163,9 +163,6 @@ const handleForgot = async () => {
 const switchToRegister = () => { mode.value = 'register'; step.value = 1; isForgot.value = false }
 const switchToLogin = () => { mode.value = 'login'; isForgot.value = false }
 
-const panelTitle = computed(() =>
-  mode.value === 'login' ? 'Chào mừng Nông Dân!' : step.value === 1 ? 'Tạo tài khoản' : 'Hoàn tất hồ sơ'
-)
 </script>
 
 <template>
@@ -394,7 +391,7 @@ const panelTitle = computed(() =>
               <div class="nd-input-wrap" style="padding: 10px; border: 1px dashed #ccc; border-radius: 8px;">
                 <input type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.heic" @change="uploadGiayPhep" />
                 <div v-if="regForm.giay_phep_urls.length > 0" style="margin-top: 10px;">
-                  <span v-for="(url, idx) in regForm.giay_phep_urls" :key="idx" style="display: block; font-size: 0.9em; color: #1a7a4a;">
+                  <span v-for="(_url, idx) in regForm.giay_phep_urls" :key="idx" style="display: block; font-size: 0.9em; color: #1a7a4a;">
                     ✓ Đã tải lên file {{ idx + 1 }}
                   </span>
                 </div>

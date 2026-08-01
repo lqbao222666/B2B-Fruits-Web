@@ -60,4 +60,10 @@ export const BaiDang = {
     const response = await api.delete(`/bai-dang/${id}`)
     return response.data
   },
+
+  // Ngừng cung cấp
+  async ngungCungCap(id: number) {
+    const response = await api.put(`/bai-dang/${id}/ngung-cung-cap`)
+    return response.data
+  }
 }

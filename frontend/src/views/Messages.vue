@@ -21,6 +21,10 @@ const messagesContainer = ref<HTMLElement | null>(null)
 
 let pollingInterval: any = null
 
+const openMedia = (url: string) => {
+  window.open(url, '_blank')
+}
+
 const currentUser = computed(() => {
   const userStr = localStorage.getItem('user')
   return userStr ? JSON.parse(userStr) : null
@@ -58,6 +62,61 @@ const fetchMessages = async (partnerId: number) => {
     }
   } catch (error) {
     console.error('Failed to load messages', error)
+  }
+}
+
+const searchPhone = ref('')
+const searchResult = ref<any>(null)
+const searchHistory = ref<any[]>([])
+const showSearchDropdown = ref(false)
+
+const loadSearchHistory = () => {
+  const h = localStorage.getItem('chatSearchHistory')
+  if (h) {
+    try {
+      searchHistory.value = JSON.parse(h)
+    } catch(e) {}
+  }
+}
+
+const handleSearchPhone = async () => {
+  if (!searchPhone.value.trim()) return;
+  try {
+    const user = await TinNhanService.searchUserByPhone(searchPhone.value.trim());
+    searchResult.value = { ...user, phone: searchPhone.value.trim() };
+    showSearchDropdown.value = true;
+  } catch (err: any) {
+    searchResult.value = null;
+    notify.error('Không tìm thấy người dùng với SĐT này');
+  }
+}
+
+const handleSelectSearchUser = async (user: any) => {
+  // Add to history
+  const newHistory = searchHistory.value.filter(u => u.user_id !== user.user_id);
+  newHistory.unshift(user);
+  if (newHistory.length > 10) newHistory.pop();
+  searchHistory.value = newHistory;
+  localStorage.setItem('chatSearchHistory', JSON.stringify(newHistory));
+
+  showSearchDropdown.value = false;
+  searchPhone.value = '';
+  searchResult.value = null;
+
+  await selectConversation(user.user_id);
+  fetchConversations();
+}
+
+const clearSearchHistory = () => {
+  searchHistory.value = [];
+  localStorage.removeItem('chatSearchHistory');
+}
+
+// Click outside to close dropdown
+const handleGlobalClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement;
+  if (!target.closest('.search-container')) {
+    showSearchDropdown.value = false;
   }
 }
 
@@ -129,10 +188,27 @@ const handleFileSelect = async (event: Event) => {
   }
 }
 
+import socketService from '@/service/socket';
+
 const activePartner = computed(() => {
   if (!activePartnerId.value) return null
   return conversations.value.find(c => c.partnerId === activePartnerId.value)?.partner
 })
+
+const handleNewMessage = (message: any) => {
+  // Check if we are currently chatting with the sender
+  if (activePartnerId.value === message.nguoi_gui_id) {
+    messages.value.push(message)
+    scrollToBottom()
+    // Mark it as read
+    TinNhanService.markAsRead(message.tinnhan_id).then(() => {
+      fetchConversations()
+    })
+  } else {
+    // If not, just refresh conversations to update the unread count/badge
+    fetchConversations()
+  }
+}
 
 onMounted(async () => {
   if (!currentUser.value) {
@@ -147,25 +223,20 @@ onMounted(async () => {
   const queryPartnerId = route.query.partnerId
   if (queryPartnerId) {
     const pId = parseInt(queryPartnerId as string)
-    // If the partner is not in the list yet, we still select it. The backend will fetch their messages if any.
-    // However, if there are no messages, they won't appear in the list until a message is sent.
-    // For a robust app, we'd fetch the user's info if they aren't in the list, but for now this works.
     await selectConversation(pId)
   } else if (conversations.value.length > 0) {
     await selectConversation(conversations.value[0].partnerId)
   }
 
-  // Polling every 5 seconds
-  pollingInterval = setInterval(() => {
-    fetchConversations()
-    if (activePartnerId.value) {
-      fetchMessages(activePartnerId.value)
-    }
-  }, 5000)
+  socketService.on('new_message', handleNewMessage)
+
+  loadSearchHistory()
+  window.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
-  if (pollingInterval) clearInterval(pollingInterval)
+  socketService.off('new_message', handleNewMessage)
+  window.removeEventListener('click', handleGlobalClick)
 })
 </script>
 
@@ -178,6 +249,72 @@ onUnmounted(() => {
         <div class="p-6 border-b border-slate-100">
           <h1 class="text-2xl font-extrabold text-slate-800">Tin nhắn</h1>
           <p class="text-slate-500 text-sm mt-1">Kết nối và trao đổi nhanh chóng</p>
+          
+          <div class="mt-4 relative search-container">
+            <input 
+              v-model="searchPhone" 
+              @keyup.enter="handleSearchPhone"
+              @focus="showSearchDropdown = true"
+              type="text" 
+              placeholder="Nhập SĐT để bắt đầu nhắn tin..." 
+              class="w-full bg-slate-100 border-none rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/30 focus:bg-white transition-colors"
+            />
+            <span class="material-symbols-outlined absolute left-3.5 top-2.5 text-slate-400 text-[20px]">search</span>
+            
+            <!-- Search Dropdown -->
+            <div 
+              v-if="showSearchDropdown && (searchResult || searchHistory.length > 0)"
+              class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden"
+            >
+              <!-- Search Result -->
+              <div v-if="searchResult">
+                <div class="px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Kết quả tìm kiếm
+                </div>
+                <div 
+                  @click="handleSelectSearchUser(searchResult)"
+                  class="p-3 hover:bg-[#f0f8e6] cursor-pointer flex items-center gap-3 transition-colors"
+                >
+                  <div class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+                    <img v-if="searchResult.avatar_url" :src="getAvatarUrl(searchResult.avatar_url)" class="w-full h-full object-cover"/>
+                    <div v-else class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold bg-[#E8F5E9]">
+                      {{ searchResult.full_name.charAt(0).toUpperCase() }}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="font-bold text-sm text-slate-800">{{ searchResult.full_name }}</div>
+                    <div class="text-xs text-slate-500">{{ searchResult.phone }}</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- History -->
+              <div v-if="!searchResult && searchHistory.length > 0">
+                <div class="px-4 py-2 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                  <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Lịch sử</span>
+                  <button @click="clearSearchHistory" class="text-xs text-[#2E7D32] hover:underline font-medium">Xóa</button>
+                </div>
+                <div class="max-h-[250px] overflow-y-auto custom-scrollbar">
+                  <div 
+                    v-for="(hist, idx) in searchHistory" :key="idx"
+                    @click="handleSelectSearchUser(hist)"
+                    class="p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
+                  >
+                    <div class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+                      <img v-if="hist.avatar_url" :src="getAvatarUrl(hist.avatar_url)" class="w-full h-full object-cover"/>
+                      <div v-else class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold bg-[#E8F5E9]">
+                        {{ hist.full_name.charAt(0).toUpperCase() }}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="font-bold text-sm text-slate-800">{{ hist.full_name }}</div>
+                      <div class="text-xs text-slate-500">{{ hist.phone || 'SĐT' }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -316,7 +453,7 @@ onUnmounted(() => {
                     <!-- Attachments -->
                     <template v-if="msg.attachments && msg.attachments.length > 0">
                       <div v-for="(att, i) in msg.attachments" :key="i" class="rounded-lg overflow-hidden max-w-full">
-                        <img v-if="att.type === 'image'" :src="getAvatarUrl(att.url)" class="max-w-[200px] max-h-[200px] object-cover cursor-pointer" @click="window.open(getAvatarUrl(att.url), '_blank')"/>
+                        <img v-if="att.type === 'image'" :src="getAvatarUrl(att.url)" class="max-w-[200px] max-h-[200px] object-cover cursor-pointer" @click="openMedia(getAvatarUrl(att.url))"/>
                         <video v-else-if="att.type === 'video'" :src="getAvatarUrl(att.url)" controls class="max-w-[200px] max-h-[200px] object-contain bg-black"></video>
                       </div>
                     </template>

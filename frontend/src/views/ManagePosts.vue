@@ -78,23 +78,34 @@ const getStatusBadge = (status: string) => {
 }
 
 const deletePost = async (id: number) => {
-  if (!confirm('Nếu bài đăng đã có đơn hàng, hệ thống sẽ chuyển sang trạng thái "Ngừng cung cấp". Nếu chưa có đơn hàng nào, bài đăng sẽ bị xóa vĩnh viễn. Bạn có chắc chắn muốn tiếp tục?')) return
+  if (!confirm('Xóa bài đăng: Bài đăng sẽ biến mất khỏi hệ thống. Nếu có đơn hàng đang cọc, bài đăng vẫn sẽ được giữ lại (ở dạng ẩn) cho người mua tiếp tục giao dịch. Bạn có chắc chắn muốn xóa?')) return
   try {
     await BaiDang.delete(id)
-    notify.success('Đã xử lý thành công!')
+    notify.success('Đã xóa bài đăng thành công!')
     await fetchMyPosts()
   } catch (err) {
-    notify.error('Xoá bài đăng thất bại')
+    notify.error('Xóa bài đăng thất bại')
+  }
+}
+
+const stopProvidingPost = async (id: number) => {
+  if (!confirm('Ngừng cung cấp: Bài đăng sẽ chuyển sang trạng thái Ẩn và Số lượng kho sẽ về 0. Bạn có chắc chắn muốn tiếp tục?')) return
+  try {
+    await BaiDang.ngungCungCap(id)
+    notify.success('Đã ngừng cung cấp bài đăng!')
+    await fetchMyPosts()
+  } catch (err) {
+    notify.error('Cập nhật trạng thái thất bại')
   }
 }
 
 const toggleVisibility = async (post: any) => {
   try {
     if (post.trang_thai === 'an') {
-      await BaiDang.moLaiBaiDang(post.baidang_id)
+      await BaiDang.update(post.baidang_id, { trang_thai: 'dang_ban' })
       notify.success('Đã hiển thị lại bài đăng')
     } else {
-      await BaiDang.anBaiDang(post.baidang_id, 'Người đăng tự ẩn')
+      await BaiDang.update(post.baidang_id, { trang_thai: 'an' })
       notify.success('Đã ẩn bài đăng')
     }
     await fetchMyPosts()
@@ -231,9 +242,14 @@ const getImageUrl = (images: any) => {
                 Sửa bài
               </button>
               
+              <button @click="stopProvidingPost(post.baidang_id)" class="px-4 py-2 text-sm font-bold text-[#E65100] bg-[#FFF3E0] hover:bg-[#FFE0B2] rounded-lg transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">stop_circle</span>
+                Ngừng cung cấp
+              </button>
+
               <button @click="deletePost(post.baidang_id)" class="px-4 py-2 text-sm font-bold text-[#C62828] bg-[#FFEBEE] hover:bg-[#FFCDD2] rounded-lg transition-colors flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[16px]">block</span>
-                Xóa / Ngừng
+                <span class="material-symbols-outlined text-[16px]">delete</span>
+                Xóa bài
               </button>
             </div>
           </div>

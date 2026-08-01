@@ -203,7 +203,6 @@ const deliveryAddress = ref('')
 const deliveryPhone = ref('')
 const deliveryName = ref(user?.full_name || user?.username || '')
 const distanceKm = ref(0)
-const shippingFee = ref(0)
 let map: L.Map | null = null
 let userMarker: L.Marker | null = null
 
@@ -484,6 +483,11 @@ const startMockPayment = () => {
       await executeCheckout()
     }
   }, 1000)
+}
+
+const closeMockPaymentModal = () => {
+  showMockPaymentModal.value = false
+  if (mockTimer) clearInterval(mockTimer)
 }
 
 const executeCheckout = async () => {
@@ -824,7 +828,7 @@ onMounted(() => {
     <div v-if="showMockPaymentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
       <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 text-center relative overflow-hidden animate-fade-in">
         
-        <button @click="showMockPaymentModal = false; if(mockTimer) clearInterval(mockTimer);" class="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors z-10">
+        <button @click="closeMockPaymentModal" class="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors z-10">
           <span class="material-symbols-outlined text-slate-600">close</span>
         </button>
 

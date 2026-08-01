@@ -17,25 +17,34 @@ const isAuthPage = computed(() => {
 </script>
 
 <template>
-  <div class="relative flex min-h-screen flex-col bg-white text-slate-900 antialiased">
-    <Navbar v-if="!isAuthPage" />
+  <div class="relative flex min-h-screen flex-col bg-slate-50/60 text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
+    <!-- Soft Decorative Ambient Background Gradients -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="absolute -top-40 -left-40 w-96 h-96 bg-emerald-200/30 rounded-full blur-3xl animate-float"></div>
+      <div class="absolute top-1/3 -right-20 w-96 h-96 bg-teal-200/20 rounded-full blur-3xl animate-float" style="animation-delay: -2s;"></div>
+      <div class="absolute bottom-10 left-1/4 w-96 h-96 bg-green-200/25 rounded-full blur-3xl animate-float" style="animation-delay: -4s;"></div>
+    </div>
+
+    <Navbar v-if="!isAuthPage" class="relative z-30" />
 
     <main
-      class="flex-grow relative bg-cover bg-center bg-no-repeat transition-all duration-500"
-      :class="{ 'px-10': !isAuthPage }"
+      class="flex-grow relative z-10 transition-all duration-300"
+      :class="{ 'px-4 sm:px-6 lg:px-8 py-6': !isAuthPage }"
     >
-      <div v-if="!isAuthPage" class="absolute inset-0 bg-white/80 z-0"></div>
-
-      <div :class="{ 'relative z-10 container mx-auto px-4': !isAuthPage }">
-        <RouterView />
+      <div :class="{ 'container mx-auto': !isAuthPage }">
+        <RouterView v-slot="{ Component }">
+          <transition name="fade-slide" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </RouterView>
       </div>
     </main>
 
     <Chatbot v-if="!isAuthPage" />
-    <Footer v-if="!isAuthPage" />
+    <Footer v-if="!isAuthPage" class="relative z-20" />
   </div>
 </template>
 
 <style scoped>
-/* Bạn có thể thêm hiệu ứng mượt ở đây */
+/* Scoped styles if needed */
 </style>

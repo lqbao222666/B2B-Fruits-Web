@@ -127,7 +127,6 @@ const removePhanLoai = (index: number) => {
 };
 
 const selectedImages = ref<{ file: File; isMain: boolean }[]>([]);
-const imageUrls = ref<string[]>([]);
 
 // Map State
 let map: L.Map | null = null;

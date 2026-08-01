@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import api from '@/service/api.ts'
 import { ChungLoaiService } from '@/service/chungloai.ts'
+import { getImageUrl } from '@/utils/image.ts'
 
 const router = useRouter()
 const chungLoais = ref<any[]>([])
@@ -14,15 +15,6 @@ const isLoading = ref(true)
 const userRole = ref<string | null>(null)
 
 // ─── Fetch dữ liệu ───
-const BACKEND_URL = 'http://localhost:3000'
-const getImageUrl = (path: any) => {
-  if (!path) return ''
-  let imgPath = typeof path === 'object' && path.url ? path.url : path;
-  if (typeof imgPath !== 'string') return ''
-  if (imgPath.startsWith('http')) return imgPath
-  return `${BACKEND_URL}${imgPath.startsWith('/') ? '' : '/'}${imgPath}`
-}
-
 const fetchData = async () => {
   try {
     isLoading.value = true
@@ -35,10 +27,7 @@ const fetchData = async () => {
     chungLoais.value = clRes.value || clRes || []
     categories.value = catRes.data?.value || catRes.data || []
     const prods = prodRes.data?.value || prodRes.data || []
-    latestProducts.value = Array.isArray(prods) ? prods.map(p => ({
-      ...p,
-      image: (Array.isArray(p.images) && p.images.length > 0 && p.images[0] && typeof p.images[0] === 'string' && p.images[0].startsWith('http')) ? p.images[0] : `${BACKEND_URL}/${p.images?.[0]}`
-    })).slice(0, 8) : []
+    latestProducts.value = Array.isArray(prods) ? prods.slice(0, 10) : []
     const sups = supRes.data?.value || supRes.data || []
     featuredSuppliers.value = Array.isArray(sups) ? sups : []
   } catch (e) {
@@ -278,22 +267,33 @@ onMounted(() => {
           </div>
 
           <!-- Recent Products -->
-          <div class="bg-slate-50 rounded-xl p-3 border border-slate-100">
-            <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Sản phẩm nổi bật</div>
-            <div class="flex gap-2 h-12">
+          <div class="bg-slate-50/80 rounded-xl p-3 border border-slate-100">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span>Sản phẩm nổi bật</span>
+              <span v-if="s.recentProducts && s.recentProducts.length > 0" class="text-[10px] text-emerald-600 font-semibold">{{ s.recentProducts.length }} sản phẩm</span>
+            </div>
+            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
               <template v-if="s.recentProducts && s.recentProducts.length > 0">
-                <div v-for="(prod, pIdx) in s.recentProducts.slice(0, 3)" :key="pIdx" class="flex-1 bg-white rounded-lg border border-slate-200 overflow-hidden relative group cursor-pointer max-w-[33%]" :title="prod.name">
-                  <img v-if="prod.image" :src="getImageUrl(prod.image)" class="w-full h-full object-cover" />
-                  <div v-else class="w-full h-full bg-slate-100 flex items-center justify-center">
-                    <span class="material-symbols-outlined text-slate-300 text-sm">image</span>
-                  </div>
+                <div
+                  v-for="(prod, pIdx) in s.recentProducts"
+                  :key="pIdx"
+                  class="w-16 h-16 flex-shrink-0 bg-white rounded-xl border border-slate-200 overflow-hidden relative group cursor-pointer shadow-sm hover:border-emerald-500 transition-all"
+                  :title="prod.name || prod.ten_nong_san || prod.tieu_de"
+                  @click="router.push(`/product/${prod.id || prod.baidang_id}`)"
+                >
+                  <img
+                    :src="getImageUrl(prod, prod.name || prod.ten_nong_san)"
+                    class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    :alt="prod.name || prod.ten_nong_san || prod.tieu_de"
+                    @error="(e: any) => { e.target.src = 'https://placehold.co/400x400/e2e8f0/1e293b?text=N%C3%B4ng+S%E1%BA%A3n' }"
+                  />
                   <!-- Tooltip -->
-                  <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1 text-center">
-                    <span class="text-[10px] font-bold text-white leading-tight line-clamp-2">{{ prod.name }}</span>
+                  <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-1 text-center backdrop-blur-[1px]">
+                    <span class="text-[10px] font-bold text-white leading-tight line-clamp-2">{{ prod.name || prod.ten_nong_san || prod.tieu_de }}</span>
                   </div>
                 </div>
               </template>
-              <div v-else class="flex-1 flex items-center justify-center text-xs text-slate-400">
+              <div v-else class="flex-1 py-3 text-center text-xs text-slate-400 italic">
                 Chưa có sản phẩm
               </div>
             </div>
@@ -443,12 +443,11 @@ onMounted(() => {
         >
           <div class="product-img-wrap">
             <img
-              v-if="p.images && p.images[0]"
-              :src="getImageUrl(p.images[0])"
+              :src="getImageUrl(p.images || p.image || p.hinhanh || p, p.tieu_de || p.ten_nong_san)"
               :alt="p.tieu_de || p.ten_nong_san"
               class="product-img"
+              @error="(e: any) => { e.target.src = 'https://placehold.co/400x400/e2e8f0/1e293b?text=N%C3%B4ng+S%E1%BA%A3n' }"
             />
-            <div v-else class="product-img-placeholder">🌾</div>
             <span class="product-badge">MỚI</span>
           </div>
           <div class="product-info">
@@ -487,8 +486,15 @@ onMounted(() => {
 /* ═══════════ ROOT ═══════════ */
 .home-root {
   font-family: 'Inter', sans-serif;
-  background: #fff;
+  background: transparent;
   min-height: 100vh;
+}
+
+.section-title-green {
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 800;
 }
 
 /* ═══════════ HERO ═══════════ */

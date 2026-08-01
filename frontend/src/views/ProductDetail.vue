@@ -2,10 +2,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { BaiDang } from '@/service/baidang.ts'
+import { DanhGiaService } from '@/service/danhGia.ts'
 import VueEasyLightbox from 'vue-easy-lightbox'
 import { notify } from '@/utils/notifier.ts'
-import { DonHang } from '@/service/donhang.ts'
 import api from '@/service/api.ts'
+import FollowToggle from '@/components/FollowToggle.vue'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -24,8 +25,6 @@ const route = useRoute()
 const router = useRouter()
 const post = ref<any>(null)
 const loading = ref(true)
-const quantity = ref<number>(1)
-const selectedPhanLoai = ref<any>(null)
 const isCheckingOut = ref(false)
 const showPaymentModal = ref(false)
 const paymentStep = ref(0) // 0 = showing QR, 1 = success
@@ -47,7 +46,6 @@ const warehouseLocation = ref<{ lat: number, lng: number } | null>(null)
 const distanceKm = ref(0)
 const shippingFee = ref(0)
 let map: L.Map | null = null
-let farmerMarker: L.Marker | null = null
 let warehouseMarker: L.Marker | null = null
 let routeLine: L.Polyline | null = null
 
@@ -268,7 +266,7 @@ const initMap = () => {
     attribution: '© OpenStreetMap'
   }).addTo(map);
 
-  farmerMarker = L.marker([farmerLat, farmerLng]).addTo(map).bindPopup('Vị trí lô hàng (Nông dân)').openPopup();
+  L.marker([farmerLat, farmerLng]).addTo(map).bindPopup('Vị trí lô hàng (Nông dân)').openPopup();
 
   map.on('click', (e: L.LeafletMouseEvent) => {
     moveToWarehouse(e.latlng.lat, e.latlng.lng);
@@ -279,16 +277,15 @@ const initMap = () => {
   }
 }
 
+import { getImageUrl as parseImageUrl } from '@/utils/image.ts'
+
 const getImageUrl = (img: any) => {
-  if (!img) return 'https://placehold.co/600x600?text=Không+có+ảnh'
-  const path = typeof img === 'string' ? img : img.url;
-  return path.startsWith('http') ? path : `http://localhost:3000${path}`
+  return parseImageUrl(img, 'Chi Tiết Sản Phẩm')
 }
 
 const getMainImageUrl = () => {
-  if (!post.value?.images || post.value.images.length === 0) return getImageUrl(null);
-  const mainImg = post.value.images.find((i: any) => i.is_main) || post.value.images[0];
-  return getImageUrl(mainImg);
+  if (!post.value) return getImageUrl(null)
+  return getImageUrl(post.value.images || post.value)
 }
 
 const formatDate = (dateString: string) => {
@@ -303,11 +300,49 @@ const formatPrice = (price: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price)
 }
 
-const openLightbox = (index: number) => {
+const openLightbox = (index: number | string) => {
   if (post.value?.images && Array.isArray(post.value.images)) {
     imgsRef.value = post.value.images.map((img: any) => getImageUrl(img))
-    lightboxIndex.value = index
+    lightboxIndex.value = Number(index)
     isLightboxOpen.value = true
+  }
+}
+
+const danhGiaList = ref<any[]>([])
+const loadingDanhGia = ref(false)
+const replyTexts = ref<Record<number, string>>({})
+const submittingReplyId = ref<number | null>(null)
+
+const fetchDanhGia = async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+  loadingDanhGia.value = true
+  try {
+    const res = await DanhGiaService.getByBaiDang(id)
+    danhGiaList.value = res || []
+  } catch (err) {
+    console.error('Lỗi tải đánh giá sản phẩm:', err)
+  } finally {
+    loadingDanhGia.value = false
+  }
+}
+
+const handleReplyReview = async (danhgia_id: number) => {
+  const text = replyTexts.value[danhgia_id]?.trim()
+  if (!text) {
+    notify.error('Vui lòng nhập nội dung phản hồi')
+    return
+  }
+  submittingReplyId.value = danhgia_id
+  try {
+    await DanhGiaService.reply(danhgia_id, { tra_loi: text })
+    notify.success('Đã gửi phản hồi thành công!')
+    replyTexts.value[danhgia_id] = ''
+    await fetchDanhGia()
+  } catch (err: any) {
+    notify.error(err?.response?.data?.message || 'Không thể gửi phản hồi')
+  } finally {
+    submittingReplyId.value = null
   }
 }
 
@@ -324,6 +359,7 @@ const fetchData = async () => {
       })
     }
     fetchSavedLocations()
+    fetchDanhGia()
     setTimeout(initMap, 200)
   } catch (e) {
     console.error('Lỗi tải bài đăng:', e)
@@ -437,6 +473,15 @@ watch(() => route.params.id, (newId) => {
     </div>
 
     <div v-else>
+      <!-- Banner báo hiệu bài đăng đã bị xóa -->
+      <div v-if="post.trang_thai === 'da_xoa'" class="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
+        <span class="material-symbols-outlined text-red-500 mt-0.5">warning</span>
+        <div>
+          <h3 class="font-bold text-red-800">Sản phẩm này đã ngừng kinh doanh/bị xóa bởi người bán</h3>
+          <p class="text-sm text-red-700 mt-1">Bạn chỉ có thể xem lại thông tin sản phẩm để hoàn tất phần giao dịch còn lại của đơn hàng hiện tại.</p>
+        </div>
+      </div>
+
       <!-- Breadcrumb -->
       <nav class="flex items-center gap-2 mb-8 text-[13px] font-bold text-slate-400 uppercase tracking-wide">
         <RouterLink to="/" class="hover:text-[#2E7D32] transition-colors flex items-center gap-1">
@@ -505,9 +550,20 @@ watch(() => route.params.id, (newId) => {
             <h1 class="text-3xl md:text-4xl font-black text-slate-900 leading-tight mb-4">
               {{ post.tieu_de }}
             </h1>
-            <div class="flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl text-slate-600 font-medium inline-flex">
-              <span class="material-symbols-outlined text-slate-400">location_on</span>
-              {{ post.tinh_thanh }}
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl text-slate-600 font-medium inline-flex">
+                <span class="material-symbols-outlined text-slate-400">location_on</span>
+                {{ post.tinh_thanh }}
+              </div>
+              <div v-if="post.nguoiDang" class="flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-xl text-slate-600 font-medium inline-flex">
+                <span class="material-symbols-outlined text-slate-400">storefront</span>
+                {{ post.nguoiDang?.user?.full_name || 'Nông dân' }}
+              </div>
+              <FollowToggle 
+                v-if="post.nguoi_dang_id"
+                :sellerId="post.nguoi_dang_id" 
+                :sellerName="post.nguoiDang?.user?.full_name || 'Nông dân'" 
+              />
             </div>
             
             <div v-if="post.tieuChuans && post.tieuChuans.length > 0" class="flex flex-wrap gap-2 mt-3">
@@ -591,15 +647,120 @@ watch(() => route.params.id, (newId) => {
             <p class="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">{{ post.mo_ta || 'Chưa có mô tả cho sản phẩm này.' }}</p>
           </div>
 
+          <!-- ĐÁNH GIÁ & BÌNH LUẬN TỪ NGƯỜI MUA TRƯỚC (LƯU TRỮ KHI TÁI SỬ DỤNG BÀI ĐĂNG) -->
+          <div class="bg-white p-6 rounded-2xl border border-slate-200 mt-4 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+              <div>
+                <h3 class="text-base font-black text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                  <span class="material-symbols-outlined text-amber-500">grade</span>
+                  Đánh giá & Bình luận từ người mua trước
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">Lưu trữ toàn bộ đánh giá uy tín của các giao dịch hoàn thành trước đó đối với bài đăng này</p>
+              </div>
+
+              <!-- Điểm trung bình bài đăng -->
+              <div class="flex items-center gap-3 bg-amber-50 px-4 py-2 rounded-2xl border border-amber-200">
+                <div class="text-2xl font-black text-amber-600">{{ Number(post.diem_trung_binh || 0).toFixed(1) }}</div>
+                <div>
+                  <div class="flex text-amber-400 text-sm">
+                    <span v-for="s in 5" :key="s">{{ s <= Math.round(Number(post.diem_trung_binh || 0)) ? '★' : '☆' }}</span>
+                  </div>
+                  <div class="text-[11px] font-bold text-slate-500">{{ danhGiaList.length }} lượt đánh giá</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Loading -->
+            <div v-if="loadingDanhGia" class="py-6 text-center text-xs text-slate-400">Đang tải đánh giá...</div>
+
+            <!-- Danh sách rỗng -->
+            <div v-else-if="danhGiaList.length === 0" class="py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <span class="material-symbols-outlined text-3xl text-slate-300 mb-1">rate_review</span>
+              <p class="text-sm font-bold text-slate-600">Chưa có đánh giá nào cho bài đăng này</p>
+              <p class="text-xs text-slate-400 mt-1">Các doanh nghiệp hoàn thành giao dịch đầu tiên sẽ để lại bình luận ở đây.</p>
+            </div>
+
+            <!-- Danh sách đánh giá -->
+            <div v-else class="space-y-6">
+              <div v-for="review in danhGiaList" :key="review.danhgia_id" class="bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center shadow-sm uppercase">
+                      {{ (review.nguoiDanhGia?.full_name || 'DN')[0] }}
+                    </div>
+                    <div>
+                      <div class="font-bold text-sm text-slate-800">{{ review.nguoiDanhGia?.full_name || 'Doanh nghiệp mua hàng' }}</div>
+                      <div class="text-[11px] text-slate-400">{{ formatDate(review.created_at) }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Số sao -->
+                  <div class="flex items-center gap-1 bg-white px-3 py-1 rounded-xl border border-slate-200 text-amber-500 font-bold text-xs">
+                    <span>{{ review.diem_tong }}</span>
+                    <span>★</span>
+                  </div>
+                </div>
+
+                <!-- Tiêu chí con -->
+                <div class="flex flex-wrap gap-3 text-[11px] text-slate-600 bg-white/60 p-2 rounded-xl border border-slate-100">
+                  <span v-if="review.diem_chat_luong">Chất lượng: <strong class="text-amber-600">{{ review.diem_chat_luong }}★</strong></span>
+                  <span v-if="review.diem_dung_hen">Đúng hẹn: <strong class="text-amber-600">{{ review.diem_dung_hen }}★</strong></span>
+                  <span v-if="review.diem_thai_do">Thái độ: <strong class="text-amber-600">{{ review.diem_thai_do }}★</strong></span>
+                </div>
+
+                <!-- Nội dung bình luận -->
+                <p class="text-slate-700 text-sm leading-relaxed">{{ review.nhan_xet }}</p>
+
+                <!-- Ảnh đính kèm -->
+                <div v-if="review.images && review.images.length > 0" class="flex gap-2 pt-1 overflow-x-auto">
+                  <img 
+                    v-for="(img, idx) in review.images" 
+                    :key="idx" 
+                    :src="getImageUrl(img)" 
+                    class="w-16 h-16 object-cover rounded-xl border border-slate-200 shadow-sm cursor-pointer hover:scale-105 transition-transform"
+                  />
+                </div>
+
+                <!-- Phản hồi từ Nông dân chủ bài đăng -->
+                <div v-if="review.tra_loi" class="mt-3 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-100 text-xs text-emerald-900 space-y-1">
+                  <div class="font-bold flex items-center gap-1.5 text-emerald-800">
+                    <span class="material-symbols-outlined text-[16px]">reply</span>
+                    Phản hồi từ Nông dân (Chủ bài đăng):
+                  </div>
+                  <p class="text-slate-700 font-medium">{{ review.tra_loi }}</p>
+                </div>
+
+                <!-- Ô nhập phản hồi (cho Nông dân sở hữu bài đăng nếu chưa phản hồi) -->
+                <div v-else-if="user && (user.id === post.nguoi_dang_id || user.user_id === post.nguoi_dang_id)" class="mt-3 pt-3 border-t border-slate-200/60">
+                  <div class="flex gap-2">
+                    <input 
+                      v-model="replyTexts[review.danhgia_id]"
+                      type="text" 
+                      placeholder="Trả lời bình luận này..."
+                      class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                    <button 
+                      @click="handleReplyReview(review.danhgia_id)"
+                      :disabled="submittingReplyId === review.danhgia_id"
+                      class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <span>Trả lời</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Hành động -->
           <div class="mt-auto pt-6 flex flex-col sm:flex-row gap-4 border-t border-slate-100">
             <button @click="contactSeller" class="w-full sm:w-1/2 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 px-6 py-4 rounded-2xl font-bold transition-all shadow-sm active:scale-95">
               <span class="material-symbols-outlined">chat</span>
               Nhắn tin Nông dân
             </button>
-            <button @click="handleCheckout" :disabled="isCheckingOut || post.trang_thai === 'an' || post.trang_thai === 'da_ban' || post.trang_thai === 'cho_duyet'" class="w-full sm:w-1/2 flex items-center justify-center gap-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white border-2 border-[#2E7D32] px-6 py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:bg-slate-300 disabled:border-slate-300 disabled:hover:bg-slate-300">
+            <button @click="handleCheckout" :disabled="isCheckingOut || post.trang_thai === 'an' || post.trang_thai === 'da_ban' || post.trang_thai === 'cho_duyet' || post.trang_thai === 'da_xoa'" class="w-full sm:w-1/2 flex items-center justify-center gap-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white border-2 border-[#2E7D32] px-6 py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:bg-slate-300 disabled:border-slate-300 disabled:hover:bg-slate-300">
               <span class="material-symbols-outlined">payments</span>
-              {{ post.trang_thai === 'an' ? 'Ngừng cung cấp' : (post.trang_thai === 'da_ban' ? 'Đã bán hết' : (post.trang_thai === 'cho_duyet' ? 'Chờ duyệt' : (isCheckingOut ? 'Đang xử lý...' : 'Đặt Hàng & Cọc 15%'))) }}
+              {{ post.trang_thai === 'da_xoa' ? 'Bài đăng đã bị xóa' : (post.trang_thai === 'an' ? 'Ngừng cung cấp' : (post.trang_thai === 'da_ban' ? 'Đã bán hết' : (post.trang_thai === 'cho_duyet' ? 'Chờ duyệt' : (isCheckingOut ? 'Đang xử lý...' : 'Đặt Hàng & Cọc 15%')))) }}
             </button>
           </div>
           

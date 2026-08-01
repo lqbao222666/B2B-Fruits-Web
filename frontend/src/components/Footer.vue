@@ -177,8 +177,8 @@ import { RouterLink } from 'vue-router'
 
 /* =================== MAIN SECTION =================== */
 .footer-main {
-  background: #F1F8E9;
-  border-top: 2px solid #C8E6C9;
+  background: linear-gradient(180deg, #f8fafc 0%, #ecfdf5 100%);
+  border-top: 1px solid rgba(16, 185, 129, 0.2);
   position: relative;
   overflow: hidden;
 }
@@ -209,23 +209,29 @@ import { RouterLink } from 'vue-router'
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.footer-logo:hover {
+  transform: translateY(-1px);
 }
 
 .footer-logo-icon {
   width: 46px;
   height: 46px;
-  background: #E8F5E9;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #A5D6A7;
+  border: 1.5px solid rgba(16, 185, 129, 0.3);
   flex-shrink: 0;
-  transition: background 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .footer-logo:hover .footer-logo-icon {
-  background: #2E7D32;
+  background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
 }
 
 .footer-logo:hover .footer-logo-icon svg {
@@ -240,7 +246,9 @@ import { RouterLink } from 'vue-router'
   display: block;
   font-size: 20px;
   font-weight: 800;
-  color: #1B5E20;
+  background: linear-gradient(135deg, #059669 0%, #0d9488 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   letter-spacing: -0.5px;
 }
 

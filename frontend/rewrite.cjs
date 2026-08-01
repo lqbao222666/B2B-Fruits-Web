@@ -1,225 +1,12 @@
-<script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { BaiDang } from '@/service/baidang.ts'
-import api from '@/service/api.ts'
+const fs = require('fs');
+const content = fs.readFileSync('src/views/Products.vue', 'utf8');
 
-const posts = ref<any[]>([])
-const categories = ref<any[]>([])
-const chungLoais = ref<any[]>([])
-const loading = ref(true)
-const route = useRoute()
-const router = useRouter()
-const searchQuery = ref('')
-const sortOption = ref('newest')
+const templateStart = content.indexOf('<template>');
+const templateEnd = content.indexOf('</template>') + 11;
+const beforeTemplate = content.slice(0, templateStart);
+const afterTemplate = content.slice(templateEnd);
 
-// Phân trang
-const currentPage = ref(1)
-const itemsPerPage = 15
-
-// Menu danh mục mobile/desktop
-const isCategoryOpen = ref(false)
-
-// Các biến trạng thái cho bộ lọc
-const filterProvince = ref<string>('')
-const filterPriceRange = ref<string>('')
-const filterStandard = ref<string>('')
-const filterMinRating = ref<number>(0)
-
-// Trích xuất danh sách tỉnh thành và tiêu chuẩn từ posts
-const availableProvinces = computed(() => {
-  const p = new Set(posts.value.map(x => x.tinh_thanh).filter(Boolean))
-  return Array.from(p).sort()
-})
-
-const availableStandards = computed(() => {
-  const s = new Set<string>()
-  posts.value.forEach(p => {
-    if (p.tieuChuans) {
-      p.tieuChuans.forEach((t: any) => s.add(t.ten_tieu_chuan))
-    }
-  })
-  return Array.from(s).sort()
-})
-
-import { getImageUrl } from '@/utils/image.ts'
-
-const formatDate = (dateString: string) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  }).format(date)
-}
-
-const formatPrice = (price: number) => {
-  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price)
-}
-
-const fetchCategories = async () => {
-  try {
-    const [catRes, clRes] = await Promise.all([
-      api.get('/danh-muc').catch(() => ({ data: [] })),
-      api.get('/chung-loai').catch(() => ({ data: [] }))
-    ])
-    categories.value = catRes.data?.value || catRes.data || []
-    chungLoais.value = clRes.data?.value || clRes.data || []
-  } catch (e) {
-    console.error('Lỗi lấy danh mục:', e)
-  }
-}
-
-const getChildCategories = (chungloaiId: number) => {
-  return categories.value.filter(c => c.chungloai_id === chungloaiId)
-}
-
-const expandedCategory = ref<number | null>(null)
-const toggleCategory = (id: number) => {
-  expandedCategory.value = expandedCategory.value === id ? null : id
-}
-
-const fetchPosts = async () => {
-  loading.value = true
-  try {
-    const res = await BaiDang.getAll({ trang_thai: 'dang_ban' })
-    let allPosts = Array.isArray(res) ? res : (res.value || res.data || [])
-    
-    // Nếu có query category thì lọc theo danhmuc_id hoặc chungloai_id
-    if (route.query.category) {
-      const catQuery = String(route.query.category)
-      if (catQuery.startsWith('cl_')) {
-        const clId = Number(catQuery.split('_')[1])
-        allPosts = allPosts.filter((p: any) => {
-          const category = categories.value.find(c => c.danhmuc_id === p.danhmuc_id)
-          return category && category.chungloai_id === clId
-        })
-      } else {
-        allPosts = allPosts.filter((p: any) => p.danhmuc_id === Number(catQuery))
-      }
-    }
-    
-    posts.value = allPosts
-    currentPage.value = 1
-  } catch (e) {
-    console.error('Lỗi lấy bài đăng:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-const filteredAndSortedPosts = computed(() => {
-  let list = [...posts.value]
-
-  // Lọc theo từ khóa
-  if (searchQuery.value.trim()) {
-    const q = searchQuery.value.toLowerCase().trim()
-    list = list.filter(
-      (p) =>
-        p.tieu_de?.toLowerCase().includes(q) ||
-        p.ten_nong_san?.toLowerCase().includes(q) ||
-        p.tinh_thanh?.toLowerCase().includes(q)
-    )
-  }
-
-  // Lọc theo tỉnh thành
-  if (filterProvince.value) {
-    list = list.filter(p => p.tinh_thanh === filterProvince.value)
-  }
-
-  // Lọc theo giá
-  if (filterPriceRange.value) {
-    if (filterPriceRange.value === 'under-50') {
-      list = list.filter(p => p.gia_per_kg < 50000)
-    } else if (filterPriceRange.value === '50-100') {
-      list = list.filter(p => p.gia_per_kg >= 50000 && p.gia_per_kg <= 100000)
-    } else if (filterPriceRange.value === 'over-100') {
-      list = list.filter(p => p.gia_per_kg > 100000)
-    }
-  }
-
-  // Lọc theo tiêu chuẩn
-  if (filterStandard.value) {
-    list = list.filter(p => {
-      if (!p.tieuChuans) return false;
-      return p.tieuChuans.some((t: any) => t.ten_tieu_chuan === filterStandard.value)
-    })
-  }
-
-  // Lọc theo đánh giá người bán
-  if (filterMinRating.value > 0) {
-    list = list.filter(p => p.nguoiDang && Number(p.nguoiDang.diem_trung_binh) >= filterMinRating.value)
-  }
-
-  // Sắp xếp
-  if (sortOption.value === 'price-asc') {
-    list.sort((a, b) => a.gia_per_kg - b.gia_per_kg)
-  } else if (sortOption.value === 'price-desc') {
-    list.sort((a, b) => b.gia_per_kg - a.gia_per_kg)
-  } else {
-    // newest (updated_at)
-    list.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())
-  }
-
-  return list
-})
-
-const paginatedPosts = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  const end = start + itemsPerPage
-  return filteredAndSortedPosts.value.slice(start, end)
-})
-
-const totalPages = computed(() => {
-  return Math.ceil(filteredAndSortedPosts.value.length / itemsPerPage)
-})
-
-const goToPage = (page: number) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-}
-
-watch([searchQuery, sortOption, filterProvince, filterPriceRange, filterStandard, filterMinRating], () => {
-  currentPage.value = 1
-})
-
-watch(() => route.query, () => {
-  if (route.query.category !== undefined) {
-    fetchPosts()
-    isCategoryOpen.value = false
-  }
-  
-  if (route.query.province !== undefined) {
-    filterProvince.value = route.query.province ? String(route.query.province) : ''
-  }
-  
-  if (route.query.standard !== undefined) {
-    filterStandard.value = route.query.standard ? String(route.query.standard) : ''
-  }
-  
-  if (route.query.price !== undefined) {
-    filterPriceRange.value = route.query.price ? String(route.query.price) : ''
-  }
-  
-  if (route.query.rating !== undefined) {
-    filterMinRating.value = route.query.rating ? Number(route.query.rating) : 0
-  }
-}, { deep: true })
-
-onMounted(() => {
-  if (route.query.province) filterProvince.value = String(route.query.province)
-  if (route.query.standard) filterStandard.value = String(route.query.standard)
-  if (route.query.price) filterPriceRange.value = String(route.query.price)
-  if (route.query.rating) filterMinRating.value = Number(route.query.rating)
-
-  fetchCategories()
-  fetchPosts()
-})
-</script>
-
-<template>
+const newTemplate = `<template>
   <div class="products-root bg-[#f8fafc] min-h-screen">
     <!-- Backdrop cho mobile menu -->
     <transition name="fade">
@@ -308,17 +95,17 @@ onMounted(() => {
                 <ul v-show="expandedCategory === cl.chungloai_id" class="px-3 pb-3 space-y-1">
                   <li>
                     <RouterLink
-                      :to="`/products?category=cl_${cl.chungloai_id}`"
+                      :to="\`/products?category=cl_\${cl.chungloai_id}\`"
                       class="flex items-center justify-between py-2.5 px-4 rounded-xl transition-all text-sm font-medium"
-                      :class="[route.query.category === `cl_${cl.chungloai_id}` ? 'bg-[#2E7D32] text-white shadow-md' : 'text-slate-600 hover:bg-[#E8F5E9] hover:text-[#2E7D32]']"
+                      :class="[route.query.category === \`cl_\${cl.chungloai_id}\` ? 'bg-[#2E7D32] text-white shadow-md' : 'text-slate-600 hover:bg-[#E8F5E9] hover:text-[#2E7D32]']"
                     >
                       <span>Tất cả {{ cl.ten_chung_loai }}</span>
-                      <span v-if="route.query.category === `cl_${cl.chungloai_id}`" class="material-symbols-outlined text-[16px]">check_circle</span>
+                      <span v-if="route.query.category === \`cl_\${cl.chungloai_id}\`" class="material-symbols-outlined text-[16px]">check_circle</span>
                     </RouterLink>
                   </li>
                   <li v-for="child in getChildCategories(cl.chungloai_id)" :key="child.danhmuc_id">
                     <RouterLink
-                      :to="`/products?category=${child.danhmuc_id}`"
+                      :to="\`/products?category=\${child.danhmuc_id}\`"
                       class="flex items-center justify-between py-2.5 px-4 rounded-xl transition-all text-sm font-medium"
                       :class="[route.query.category == child.danhmuc_id ? 'bg-[#2E7D32] text-white shadow-md' : 'text-slate-600 hover:bg-[#E8F5E9] hover:text-[#2E7D32]']"
                     >
@@ -442,7 +229,7 @@ onMounted(() => {
           <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
             <div v-for="post in paginatedPosts" :key="post.baidang_id" class="group bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-200 hover:border-[#2E7D32]/40 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col p-3 relative">
               
-              <div class="aspect-square relative overflow-hidden rounded-[18px] bg-slate-50 mb-4 cursor-pointer" @click="router.push(`/product/${post.baidang_id}`)">
+              <div class="aspect-square relative overflow-hidden rounded-[18px] bg-slate-50 mb-4 cursor-pointer" @click="router.push(\`/product/\${post.baidang_id}\`)">
                 <img :src="getImageUrl(post)" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" :alt="post.ten_nong_san || post.tieu_de" @error="(e) => { e.target.src = 'https://placehold.co/400x400/e2e8f0/1e293b?text=N%C3%B4ng+S%E1%BA%A3n' }" />
                 <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300"></div>
 
@@ -453,7 +240,7 @@ onMounted(() => {
               </div>
 
               <div class="flex flex-col flex-grow px-2">
-                <RouterLink :to="`/product/${post.baidang_id}`" class="font-black text-slate-800 text-[15px] mb-1 line-clamp-2 leading-snug group-hover:text-[#2E7D32] transition-colors" :title="post.tieu_de">
+                <RouterLink :to="\`/product/\${post.baidang_id}\`" class="font-black text-slate-800 text-[15px] mb-1 line-clamp-2 leading-snug group-hover:text-[#2E7D32] transition-colors" :title="post.tieu_de">
                   {{ post.tieu_de }}
                 </RouterLink>
                 
@@ -486,7 +273,7 @@ onMounted(() => {
                     </span>
                   </div>
 
-                  <RouterLink :to="`/product/${post.baidang_id}`" class="w-10 h-10 rounded-xl bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center hover:bg-[#2E7D32] hover:text-white transition-all hover:scale-105 active:scale-95 shadow-sm" title="Xem chi tiết">
+                  <RouterLink :to="\`/product/\${post.baidang_id}\`" class="w-10 h-10 rounded-xl bg-[#E8F5E9] text-[#2E7D32] flex items-center justify-center hover:bg-[#2E7D32] hover:text-white transition-all hover:scale-105 active:scale-95 shadow-sm" title="Xem chi tiết">
                     <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
                   </RouterLink>
                 </div>
@@ -514,43 +301,8 @@ onMounted(() => {
       </div>
     </div>
   </div>
-</template>
+</template>`;
 
-<style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-
-.font-sans {
-  font-family: 'Inter', sans-serif;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-/* Custom Scrollbar cho Sidebar (cột bên phải) */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
-  border-radius: 20px;
-}
-.custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background-color: #94a3b8;
-}
-</style>
+const finalContent = beforeTemplate + newTemplate + afterTemplate;
+fs.writeFileSync('src/views/Products.vue', finalContent, 'utf8');
+console.log('Template replaced successfully');

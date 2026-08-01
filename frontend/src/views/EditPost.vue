@@ -104,7 +104,7 @@ onMounted(async () => {
       ]
     }
     
-    existingImages.value = Array.isArray(post.images) ? post.images : []
+    existingImages.value = Array.isArray(post.images) ? JSON.parse(JSON.stringify(post.images)) : []
     
   } catch (err) {
     console.error('Lỗi khi tải dữ liệu bài đăng:', err)
@@ -118,25 +118,45 @@ onMounted(async () => {
 const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement
   if (target.files) {
-    selectedImages.value = Array.from(target.files)
+    Array.from(target.files).forEach(file => {
+      const isFirst = existingImages.value.length === 0 && selectedImages.value.length === 0
+      selectedImages.value.push({ file, isMain: isFirst })
+    })
   }
+}
+
+const removeSelectedImage = (index: number) => {
+  selectedImages.value.splice(index, 1)
 }
 
 const removeExistingImage = (index: number) => {
   existingImages.value.splice(index, 1)
 }
 
+const setMainImage = (type: 'existing' | 'new', index: number) => {
+  existingImages.value.forEach(img => img.is_main = false)
+  selectedImages.value.forEach(img => img.isMain = false)
+  if (type === 'existing') {
+    existingImages.value[index].is_main = true
+  } else {
+    selectedImages.value[index].isMain = true
+  }
+}
+
 const uploadImages = async () => {
-  const urls: string[] = []
-  for (const file of selectedImages.value) {
+  const urls: { url: string, is_main: boolean }[] = []
+  for (const imgObj of selectedImages.value) {
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', imgObj.file)
     try {
       const res = await api.post('/bai-dang/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       if (res.data && res.data.url) {
-        urls.push(res.data.url)
+        urls.push({
+          url: res.data.url,
+          is_main: imgObj.isMain
+        })
       }
     } catch (err) {
       console.error('Lỗi upload ảnh:', err)
@@ -145,7 +165,6 @@ const uploadImages = async () => {
   return urls
 }
 
-// Gọi AI gợi ý nội dung mô tả
 const handleSuggestDescription = async () => {
   if (!form.value.ten_nong_san || !form.value.tinh_thanh) {
     notify.error('Vui lòng nhập Tên nông sản và Khu vực trước khi dùng AI gợi ý!');
@@ -177,7 +196,6 @@ const handleSuggestDescription = async () => {
   }
 }
 
-// Gọi AI gợi ý giá
 const handleSuggestPrice = async (index: number) => {
   if (!form.value.ten_nong_san || !form.value.tinh_thanh) {
     notify.error('Vui lòng nhập Tên nông sản và Khu vực trước khi gợi ý giá!');
@@ -206,7 +224,6 @@ const handleSuggestPrice = async (index: number) => {
 }
 
 const handleSubmit = async () => {
-  // Validate phân loại
   let isValidPhanLoai = true
   let tongSoLuong = 0
   let minGia = Infinity
@@ -224,12 +241,8 @@ const handleSubmit = async () => {
   
   loading.value = true
   try {
-    let uploadedUrls: string[] = []
-    if (selectedImages.value.length > 0) {
-      uploadedUrls = await uploadImages()
-    }
-
-    const finalImages = [...existingImages.value, ...uploadedUrls]
+    const uploadedImageObjects = await uploadImages()
+    const finalImages = [...existingImages.value, ...uploadedImageObjects]
 
     const payload = {
       tieu_de: form.value.tieu_de,
@@ -264,7 +277,7 @@ const handleSubmit = async () => {
 
 const getFullUrl = (path: any) => {
   if (!path) return ''
-  let imgPath = typeof path === 'object' && path.url ? path.url : path;
+  let imgPath = typeof path === 'object' && (path.url || path.image_url) ? (path.url || path.image_url) : path;
   if (typeof imgPath !== 'string') return ''
   return imgPath.startsWith('http') ? imgPath : `http://localhost:3000${imgPath.startsWith('/') ? '' : '/'}${imgPath}`
 }
@@ -428,12 +441,22 @@ const getFullUrl = (path: any) => {
             <!-- Hình ảnh cũ -->
             <div v-if="existingImages.length > 0">
               <label class="block text-sm font-bold text-slate-700 mb-2">Hình ảnh hiện tại</label>
-              <div class="flex flex-wrap gap-4">
-                <div v-for="(img, idx) in existingImages" :key="idx" class="relative w-24 h-24 rounded-xl border border-slate-200 overflow-hidden group">
-                  <img :src="getFullUrl(img)" class="w-full h-full object-cover" />
-                  <button type="button" @click="removeExistingImage(idx)" class="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+              <div class="flex flex-wrap gap-3">
+                <div v-for="(img, idx) in existingImages" :key="idx" class="relative text-xs font-bold bg-white px-3 py-2 rounded-xl border border-slate-200 flex flex-col items-center gap-1 group/img" :class="img.is_main ? 'ring-2 ring-[#2E7D32] bg-[#c8e6c9]' : ''">
+                  <!-- Badge ảnh chính -->
+                  <span v-if="img.is_main" class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 z-10">
+                    <span class="material-symbols-outlined text-[10px]">star</span>
+                    Chính
+                  </span>
+                  
+                  <div class="w-24 h-24 rounded-lg overflow-hidden relative group">
+                    <img :src="getFullUrl(img)" class="w-full h-full object-cover" />
+                  </div>
+                  
+                  <div class="flex gap-1 mt-1">
+                    <button v-if="!img.is_main" @click.prevent="setMainImage('existing', idx)" class="px-2 py-1 bg-white text-[#2E7D32] rounded border border-[#2E7D32]/20 hover:bg-[#2E7D32] hover:text-white transition-colors" title="Đặt làm ảnh chính">Chọn chính</button>
+                    <button @click.prevent="removeExistingImage(idx)" class="px-2 py-1 bg-white text-red-500 rounded border border-red-200 hover:bg-red-500 hover:text-white transition-colors" title="Xoá ảnh">Xoá</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -441,19 +464,36 @@ const getFullUrl = (path: any) => {
             <!-- Tải thêm hình -->
             <div>
               <label class="block text-sm font-bold text-slate-700 mb-2">Tải thêm hình ảnh mới</label>
-              <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-xl bg-white hover:bg-slate-50 transition-colors">
-                <div class="space-y-1 text-center">
-                  <svg class="mx-auto h-12 w-12 text-slate-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
+              <div class="mt-1 flex justify-center px-6 pt-8 pb-8 border-2 border-slate-300 border-dashed rounded-xl bg-white hover:bg-slate-50 transition-colors relative group">
+                <div class="space-y-2 text-center relative z-10">
+                  <div class="w-16 h-16 bg-[#e8f5e9] text-[#2E7D32] rounded-full flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                    <span class="material-symbols-outlined text-3xl">cloud_upload</span>
+                  </div>
                   <div class="flex text-sm text-slate-600 justify-center">
                     <label for="file-upload" class="relative cursor-pointer bg-white rounded-md font-bold text-[#2E7D32] hover:text-[#1B5E20] focus-within:outline-none">
-                      <span>Nhấn chọn ảnh</span>
+                      <span>Nhấn để chọn ảnh</span>
                       <input id="file-upload" type="file" class="sr-only" multiple accept="image/*" @change="handleFileChange">
                     </label>
+                    <p class="pl-1 text-slate-500 font-medium">hoặc kéo thả vào đây</p>
                   </div>
-                  <div v-if="selectedImages.length > 0" class="mt-2 text-xs font-bold text-slate-700">
-                    Đã chọn {{ selectedImages.length }} ảnh mới
+                  <p class="text-xs text-slate-400 font-medium">Định dạng hỗ trợ: PNG, JPG, GIF (Tối đa 5MB)</p>
+
+                  <div v-if="selectedImages.length > 0" class="mt-6 flex flex-wrap gap-3 justify-center">
+                    <div v-for="(imgObj, index) in selectedImages" :key="'new'+index" class="relative text-xs font-bold bg-[#e8f5e9] text-[#2E7D32] px-3 py-2 rounded-xl border border-[#2E7D32]/20 flex flex-col items-center gap-1 group/img" :class="imgObj.isMain ? 'ring-2 ring-[#2E7D32] bg-[#c8e6c9]' : ''">
+                      <!-- Badge ảnh chính -->
+                      <span v-if="imgObj.isMain" class="absolute -top-2 -right-2 bg-yellow-400 text-yellow-900 text-[10px] px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 z-10">
+                        <span class="material-symbols-outlined text-[10px]">star</span>
+                        Chính
+                      </span>
+                      
+                      <span class="material-symbols-outlined text-[18px]">image</span>
+                      <span class="truncate w-20 text-center">{{ imgObj.file.name }}</span>
+                      
+                      <div class="flex gap-1 mt-1">
+                        <button v-if="!imgObj.isMain" @click.prevent="setMainImage('new', index)" class="px-2 py-1 bg-white text-[#2E7D32] rounded border border-[#2E7D32]/20 hover:bg-[#2E7D32] hover:text-white transition-colors" title="Đặt làm ảnh chính">Chọn chính</button>
+                        <button @click.prevent="removeSelectedImage(index)" class="px-2 py-1 bg-white text-red-500 rounded border border-red-200 hover:bg-red-500 hover:text-white transition-colors" title="Xoá ảnh">Xoá</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

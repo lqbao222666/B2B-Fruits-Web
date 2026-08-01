@@ -4,6 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { DonHang } from '../service/donhang.ts'
 import api from '../service/api.ts'
 import ReportModal from '../components/ReportModal.vue'
+import RatingModal from '../components/RatingModal.vue'
+import FollowToggle from '../components/FollowToggle.vue'
+import { notify } from '@/utils/notifier.ts'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +19,7 @@ const loading = ref(false)
 const isCanceling = ref(false)
 
 const showReportModal = ref(false)
+const showRatingModal = ref(false)
 const reportingOrder = ref<any>(null)
 
 // --- CÁC HÀM FORMAT & HELPER ---
@@ -24,12 +28,7 @@ const formatCurrency = (amount: number | string) => {
   return Number(amount).toLocaleString('vi-VN') + 'đ'
 }
 
-const getImageUrl = (images: any) => {
-  if (Array.isArray(images) && images.length > 0) {
-    return images[0].startsWith('http') ? images[0] : `http://localhost:3000${images[0]}`
-  }
-  return 'https://placehold.co/300x300?text=AgroMarket'
-}
+
 
 const getStatusInfo = (status: string) => {
   const map: Record<string, any> = {
@@ -190,6 +189,18 @@ onMounted(() => {
                   <span class="material-symbols-outlined text-[16px]">verified</span>
                   Đã nhận hàng & Hoàn tất
                 </button>
+
+                <!-- Đánh giá sản phẩm khi đã hoàn thành đơn hàng -->
+                <div v-if="selectedOrder.trang_thai_don === 'hoan_thanh' && selectedOrder.nguoi_mua_id === userId">
+                  <span v-if="selectedOrder.danhGia" class="px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-black uppercase flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px] text-amber-500">star</span>
+                    Đã đánh giá ({{ selectedOrder.danhGia.diem_tong }}/5★)
+                  </span>
+                  <button v-else @click="showRatingModal = true" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">rate_review</span>
+                    Đánh giá sản phẩm
+                  </button>
+                </div>
                 
                 <button v-if="selectedOrder.nguoi_ban_id === userId && !['hoan_thanh', 'da_huy'].includes(selectedOrder.trang_thai_don)" @click="handleReportIssue(selectedOrder)" class="px-4 py-2 bg-[#FFF8E1] border border-[#FFE082] text-[#FF8F00] hover:bg-[#FFECB3] rounded-xl text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1">
                   <span class="material-symbols-outlined text-[16px]">report_problem</span> Báo cáo sự cố
@@ -236,6 +247,11 @@ onMounted(() => {
                     <p class="text-xs font-black text-slate-400 uppercase">Nông dân (Người bán)</p>
                     <p class="text-sm font-bold text-slate-800">{{ selectedOrder.nguoiBan?.user?.full_name || 'Không rõ' }}</p>
                     <p class="text-sm text-slate-600 flex items-center gap-1 mt-1"><span class="material-symbols-outlined text-[14px]">call</span> {{ selectedOrder.nguoiBan?.user?.phone || '---' }}</p>
+                    <FollowToggle 
+                      v-if="selectedOrder.nguoiBan?.user?.user_id || selectedOrder.nguoiBan?.user_id" 
+                      :sellerId="selectedOrder.nguoiBan?.user?.user_id || selectedOrder.nguoiBan?.user_id" 
+                      :sellerName="selectedOrder.nguoiBan?.user?.full_name" 
+                    />
                   </div>
                   <div v-else>
                     <p class="text-xs font-black text-slate-400 uppercase">Doanh nghiệp (Người mua)</p>
@@ -316,6 +332,14 @@ onMounted(() => {
       :order="reportingOrder"
       :userId="userId"
       @close="showReportModal = false"
+      @success="fetchDetail"
+    />
+
+    <RatingModal 
+      v-if="selectedOrder"
+      :show="showRatingModal"
+      :order="selectedOrder"
+      @close="showRatingModal = false"
       @success="fetchDetail"
     />
   </div>

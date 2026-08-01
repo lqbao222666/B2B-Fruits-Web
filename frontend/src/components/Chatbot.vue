@@ -1,13 +1,73 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import api from '../service/api' // Sử dụng API của NestJS
 import { marked } from 'marked'
 
 // --- CÁC BIẾN TRẠNG THÁI ---
-const isOpen = ref(false)
+const isOpen = ref(false) // Hiển thị biểu tượng (icon) lúc đầu
 const isLoading = ref(false)
 const userInput = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
+
+// --- DRAG LOGIC ---
+import { onMounted, onUnmounted } from 'vue'
+
+const position = ref({ right: 20, bottom: 20 })
+const isDragging = ref(false)
+const dragOffset = ref({ x: 0, y: 0 })
+const windowWidth = ref(1024)
+
+const handleResize = () => {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  windowWidth.value = window.innerWidth
+  position.value = { right: 20, bottom: 20 }
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+})
+
+const startDrag = (e: MouseEvent) => {
+  if (window.innerWidth < 768) return
+  // Prevent drag if clicking on an interactive element like a button (but allow dragging the main circular button)
+  if ((e.target as HTMLElement).closest('.close-btn')) return 
+  isDragging.value = true
+  dragOffset.value = {
+    x: e.clientX + position.value.right,
+    y: e.clientY + position.value.bottom
+  }
+  document.addEventListener('mousemove', onDrag)
+  document.addEventListener('mouseup', stopDrag)
+}
+
+const onDrag = (e: MouseEvent) => {
+  if (!isDragging.value) return
+  let newRight = dragOffset.value.x - e.clientX
+  let newBottom = dragOffset.value.y - e.clientY
+  
+  // Boundaries
+  if (newRight < 0) newRight = 0
+  if (newBottom < 0) newBottom = 0
+  
+  // Max boundaries (prevent dragging off-screen top/left)
+  const maxRight = window.innerWidth - (isOpen.value ? 370 : 64)
+  const maxBottom = window.innerHeight - (isOpen.value ? 540 : 64)
+  
+  if (newRight > maxRight) newRight = maxRight
+  if (newBottom > maxBottom) newBottom = maxBottom
+  
+  position.value = { right: newRight, bottom: newBottom }
+}
+
+const stopDrag = () => {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+}
 
 // --- DỮ LIỆU CHAT ---
 interface Suggestion {
@@ -110,7 +170,7 @@ watch(
 </script>
 
 <template>
-  <div class="fixed bottom-5 right-5 z-[999]">
+  <div class="fixed top-0 left-0 w-full h-full pointer-events-none z-[999]">
     <!-- Nút Tròn (Khi chatbot đóng) -->
     <transition
       enter-active-class="transition-all duration-300 ease-out"
@@ -123,7 +183,10 @@ watch(
       <button
         v-if="!isOpen"
         @click="isOpen = true"
-        class="size-16 bg-[#658a22] rounded-full shadow-xl flex items-center justify-center text-white hover:bg-[#58791d] transition-all transform hover:scale-110 active:scale-100 focus:outline-none focus:ring-4 focus:ring-[#658a22]/30"
+        @mousedown="startDrag"
+        class="absolute size-16 bg-gradient-to-r from-emerald-600 to-teal-600 rounded-full shadow-xl shadow-emerald-600/30 flex items-center justify-center text-white transition-all transform hover:scale-110 active:scale-95 focus:outline-none focus:ring-4 focus:ring-emerald-400/30 animate-soft-pulse pointer-events-auto"
+        :class="windowWidth >= 768 ? 'cursor-move' : ''"
+        :style="windowWidth >= 768 ? { bottom: position.bottom + 'px', right: position.right + 'px' } : { bottom: '20px', right: '20px' }"
         aria-label="Mở chatbot"
       >
         <span class="material-symbols-outlined text-3xl">smart_toy</span>
@@ -134,36 +197,39 @@ watch(
     <transition
       enter-active-class="transition-all duration-300 ease-out"
       leave-active-class="transition-all duration-200 ease-in"
-      enter-from-class="opacity-0 translate-y-5"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-from-class="opacity-100 translate-y-0"
-      leave-to-class="opacity-0 translate-y-5"
+      enter-from-class="opacity-0 translate-y-5 scale-95"
+      enter-to-class="opacity-100 translate-y-0 scale-100"
+      leave-from-class="opacity-100 translate-y-0 scale-100"
+      leave-to-class="opacity-0 translate-y-5 scale-95"
     >
       <div
         v-if="isOpen"
-        class="w-[360px] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col border border-slate-100"
+        class="absolute w-[370px] h-[540px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl flex flex-col border border-emerald-100 overflow-hidden pointer-events-auto max-w-[95vw]"
+        :style="windowWidth >= 768 ? { bottom: position.bottom + 'px', right: position.right + 'px' } : { bottom: '80px', right: '16px' }"
       >
         <!-- Header -->
         <div
-          class="flex items-center justify-between p-4 bg-[#f8f9fa] border-b border-slate-100 rounded-t-2xl"
+          @mousedown="startDrag"
+          class="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white select-none"
+          :class="windowWidth >= 768 ? 'cursor-move' : ''"
         >
           <div class="flex items-center gap-3">
             <div
-              class="size-10 bg-[#eef4e6] rounded-full flex items-center justify-center"
+              class="size-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/30"
             >
-              <span class="material-symbols-outlined text-primary">smart_toy</span>
+              <span class="material-symbols-outlined text-white">smart_toy</span>
             </div>
             <div>
-              <h3 class="font-bold text-slate-900 text-base">Trợ lý B2B</h3>
-              <p class="text-xs text-slate-500 flex items-center gap-1.5">
-                <span class="size-2 bg-green-500 rounded-full"></span>
-                Đang hoạt động
+              <h3 class="font-bold text-white text-base">Trợ lý AI B2B</h3>
+              <p class="text-xs text-emerald-100 flex items-center gap-1.5">
+                <span class="size-2 bg-emerald-300 rounded-full animate-pulse"></span>
+                Đang trực tuyến
               </p>
             </div>
           </div>
           <button
             @click="isOpen = false"
-            class="p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-200 transition-colors"
+            class="close-btn p-2 text-white/80 hover:text-white rounded-full hover:bg-white/20 transition-colors"
             aria-label="Đóng chatbot"
           >
             <span class="material-symbols-outlined text-xl">close</span>

@@ -2,7 +2,6 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Account } from '@/service/account.ts'
-import { Profile } from '@/service/profile.ts'
 import { notify } from '@/utils/notifier.ts'
 import api from '@/service/api.ts'
 import LocationSelector from '@/components/LocationSelector.vue'
