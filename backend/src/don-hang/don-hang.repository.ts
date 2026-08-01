@@ -115,10 +115,12 @@ export class DonHangRepository {
       // Trừ tổng tồn kho bài đăng tương ứng
       const baiDang = await tx.baiDang.findUnique({
         where: { baidang_id: numericBaiDangId },
-        select: { so_luong_con_lai: true }
+        select: { so_luong_con_lai: true, so_luong_co: true, don_vi_tinh: true, ten_nong_san: true }
       });
+      let isLowStockAlert = false;
+      let conLai = 0;
       if (baiDang) {
-        const conLai = Math.max(0, Number(baiDang.so_luong_con_lai) - totalOrderedQty);
+        conLai = Math.max(0, Number(baiDang.so_luong_con_lai) - totalOrderedQty);
         await tx.baiDang.update({
           where: { baidang_id: numericBaiDangId },
           data: {
@@ -126,6 +128,10 @@ export class DonHangRepository {
             trang_thai: conLai === 0 ? 'da_ban' : undefined
           }
         });
+
+        if (conLai < Number(baiDang.so_luong_co) / 2) {
+          isLowStockAlert = true;
+        }
       }
 
       const tongTien = tongTienHang + shippingFee;
@@ -159,6 +165,50 @@ export class DonHangRepository {
           baiDang: true
         }
       });
+
+      // Tạo thông báo
+      const buyerInfo = await tx.users.findUnique({ where: { user_id: numericUserId } });
+      const buyerName = buyerInfo ? (buyerInfo.full_name || 'Doanh Nghiệp') : 'Doanh Nghiệp';
+
+      await tx.thongBao.create({
+        data: {
+          user_id: numericUserId,
+          loai: 'don_hang',
+          tieu_de: 'Xác nhận đặt cọc 15%',
+          noi_dung: `Xác nhận đặt cọc 15% (${tienCoc.toLocaleString()} ₫) cho đơn hàng ${uniqueOrderCode} - Sản phẩm: ${baiDang?.ten_nong_san}.`,
+          ref_id: donHang.donhang_id,
+          ref_type: 'don_hang',
+        }
+      });
+
+      await tx.thongBao.create({
+        data: {
+          user_id: numericSellerId,
+          loai: 'don_hang',
+          tieu_de: 'Có đơn hàng đặt cọc mới!',
+          noi_dung: `Doanh nghiệp ${buyerName} đã đặt cọc 15% (${tienCoc.toLocaleString()} ₫) cho đơn hàng ${uniqueOrderCode} - Sản phẩm: ${baiDang?.ten_nong_san}.`,
+          ref_id: donHang.donhang_id,
+          ref_type: 'don_hang',
+        }
+      });
+
+      if (isLowStockAlert && baiDang) {
+        const existingAlert = await tx.thongBao.findFirst({
+          where: { user_id: numericSellerId, ref_id: numericBaiDangId, ref_type: 'bai_dang_low_stock' }
+        });
+        if (!existingAlert) {
+           await tx.thongBao.create({
+             data: {
+               user_id: numericSellerId,
+               loai: 'bai_dang',
+               tieu_de: `⚠️ Cảnh báo tồn kho: ${baiDang.ten_nong_san}`,
+               noi_dung: `Sản phẩm "${baiDang.ten_nong_san}" của bạn hiện còn ${conLai} ${baiDang.don_vi_tinh} (đã giảm xuống dưới 50% so với ban đầu). Hãy cập nhật thêm số lượng nếu còn hàng.`,
+               ref_id: numericBaiDangId,
+               ref_type: 'bai_dang_low_stock',
+             }
+           });
+        }
+      }
 
       return donHang;
     });
@@ -228,7 +278,8 @@ export class DonHangRepository {
         baiDang: { select: { tieu_de: true, ten_nong_san: true, images: true, don_vi_tinh: true } },
         chiTiets: {
           include: { phanLoai: true }
-        }
+        },
+        danhGia: true
       },
       orderBy: { ngay_tao: 'desc' }
     });
@@ -246,6 +297,7 @@ export class DonHangRepository {
         },
         baiDang: { select: { tieu_de: true, ten_nong_san: true } },
         chiTiets: { include: { phanLoai: true } },
+        danhGia: true
       },
     });
     if (!donHang) throw new NotFoundException('Đơn hàng không tồn tại');
@@ -253,6 +305,40 @@ export class DonHangRepository {
   }
 
   async update(donhang_id: number, data: UpdateDonHangDto) {
+    if (data.trang_thai_don === 'hoan_thanh') {
+       return this.prisma.$transaction(async (tx) => {
+         const donHang = await tx.donHang.update({
+           where: { donhang_id },
+           data,
+           include: { baiDang: true }
+         });
+
+         await tx.thongBao.create({
+           data: {
+             user_id: donHang.nguoi_mua_id,
+             loai: 'don_hang',
+             tieu_de: 'Đơn hàng hoàn tất',
+             noi_dung: `Đơn hàng ${donHang.ma_don_hang} đã hoàn tất thành công. Tổng thanh toán: ${Number(donHang.tong_tien).toLocaleString()} ₫.`,
+             ref_id: donhang_id,
+             ref_type: 'don_hang',
+           }
+         });
+
+         await tx.thongBao.create({
+           data: {
+             user_id: donHang.nguoi_ban_id,
+             loai: 'don_hang',
+             tieu_de: 'Giao dịch hoàn tất!',
+             noi_dung: `Giao dịch đơn hàng ${donHang.ma_don_hang} đã hoàn tất! +${Number(donHang.tong_tien).toLocaleString()} ₫ đã được ghi nhận vào tài khoản.`,
+             ref_id: donhang_id,
+             ref_type: 'don_hang',
+           }
+         });
+
+         return donHang;
+       });
+    }
+
     if (data.trang_thai_don === 'da_huy') {
       return this.prisma.$transaction(async (tx) => {
         const existingOrder = await tx.donHang.findUnique({ 

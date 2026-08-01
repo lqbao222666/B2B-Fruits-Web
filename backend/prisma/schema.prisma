@@ -36,6 +36,7 @@ enum TrangThaiBaiDang {
   dang_ban     // Giá hợp lệ, đang hiển thị công khai
   da_ban       // Đã bán hết (so_luong_con_lai = 0)
   an           // Ẩn tạm thời (người đăng tự ẩn)
+  da_xoa       // Đã xóa (soft-delete, ẩn khỏi mọi nơi trừ đơn hàng đã tạo)
 }
 
 /// Trạng thái đơn hàng
@@ -134,117 +135,119 @@ model VaiTro {
   @@map("vai_tro")
 }
 
-// ─────────────────────────────────────────────
-// MODULE 1: NGƯỜI DÙNG (USERS) - Lớp Tổng Quát
-// Dùng chung cho cả 3 role: nong_dan, doanh_nghiep, admin
-// ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // MODULE 1: NGƯỜI DÙNG (USERS) - Lớp Tổng Quát
+  // Dùng chung cho cả 3 role: nong_dan, doanh_nghiep, admin
+  // ─────────────────────────────────────────────
 
-model Users {
-  user_id       Int      @id @default(autoincrement())
-  email         String?  @unique @db.VarChar(150)
-  phone         String?  @unique @db.VarChar(15)
-  password_hash String   @db.VarChar(255)
-  full_name     String   @db.VarChar(150)
-  role_id       Int
-  avatar_url    String?  @db.Text
-  ngay_sinh     DateTime? @db.Date
-  gioi_tinh     String?   @db.VarChar(10)
-  is_verified   Boolean  @default(false)
-  is_active     Boolean  @default(true)
-  reset_password_otp     String?   @db.VarChar(10)
-  reset_password_expires DateTime?
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  model Users {
+    user_id       Int      @id @default(autoincrement())
+    email         String?  @unique @db.VarChar(150)
+    phone         String   @unique @db.VarChar(15)
+    password_hash String   @db.VarChar(255)
+    full_name     String   @db.VarChar(150)
+    role_id       Int
+    avatar_url    String?  @db.Text
+    ngay_sinh     DateTime? @db.Date
+    gioi_tinh     String?   @db.VarChar(10)
+    is_verified   Boolean  @default(false)
+    is_active     Boolean  @default(true)
+    reset_password_otp     String?   @db.VarChar(10)
+    reset_password_expires DateTime?
+    created_at    DateTime @default(now())
+    updated_at    DateTime @updatedAt
 
-  // Foreign keys
-  vaiTro        VaiTro   @relation(fields: [role_id], references: [role_id])
+    // Foreign keys
+    vaiTro        VaiTro   @relation(fields: [role_id], references: [role_id])
 
-  // Relations 1-1 (Lớp chuyên biệt)
-  nongDan         NongDan?
-  doanhNghiep     DoanhNghiep?
+    // Relations 1-1 (Lớp chuyên biệt)
+    nongDan         NongDan?
+    doanhNghiep     DoanhNghiep?
 
-  // Relations Hệ Thống 1-N (Sử dụng chung cho tất cả các role)
-  danhGiaDua     DanhGia[]        @relation("nguoiDanhGia")
-  danhGiaNhan    DanhGia[]        @relation("nguoiDuocDanhGia")
-  tinNhanGui     TinNhan[]        @relation("nguoiGui")
-  tinNhanNhan    TinNhan[]        @relation("nguoiNhan")
-  thongBaos      ThongBao[]
-  aiEvents       AiEvents[]
-  aiGoiYNhan     AiGoiY[]         @relation("nguoiNhan")
-  baoCaoDua      BaoCao[]         @relation("nguoiBaoCao")
-  baoCaoNhan     BaoCao[]         @relation("nguoiBiBC")
-  diaChiLuus     DiaChiLuu[]
-  gioHangs       GioHang[]
+    // Relations Hệ Thống 1-N (Sử dụng chung cho tất cả các role)
+    danhGiaDua     DanhGia[]        @relation("nguoiDanhGia")
+    danhGiaNhan    DanhGia[]        @relation("nguoiDuocDanhGia")
+    tinNhanGui     TinNhan[]        @relation("nguoiGui")
+    tinNhanNhan    TinNhan[]        @relation("nguoiNhan")
+    thongBaos      ThongBao[]
+    aiEvents       AiEvents[]
+    aiGoiYNhan     AiGoiY[]         @relation("nguoiNhan")
+    baoCaoDua      BaoCao[]         @relation("nguoiBaoCao")
+    baoCaoNhan     BaoCao[]         @relation("nguoiBiBC")
+    diaChiLuus     DiaChiLuu[]
+    gioHangs       GioHang[]
+    buyerSubscriptions TheoDoiNguoiBan[] @relation("buyerSubscriptions")
+    sellerSubscribers  TheoDoiNguoiBan[] @relation("sellerSubscribers")
 
-  @@map("users")
-}
+    @@map("users")
+  }
 
-// ─────────────────────────────────────────────
-// MODULE 2: NÔNG DÂN - Lớp Chuyên Biệt
-// Thông tin và nghiệp vụ của tác nhân Nông Dân
-// ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // MODULE 2: NÔNG DÂN - Lớp Chuyên Biệt
+  // Thông tin và nghiệp vụ của tác nhân Nông Dân
+  // ─────────────────────────────────────────────
 
-model NongDan {
-  user_id         Int      @id
-  ho_ten          String   @db.VarChar(150)
-  so_cmnd_cccd    String?  @unique @db.VarChar(20)
-  tinh_thanh      String   @db.VarChar(100)
-  huyen_xa        String?  @db.VarChar(100)
-  dia_chi_cu_the  String?  @db.Text
-  latitude        Decimal? @db.Decimal(10, 8)
-  longitude       Decimal? @db.Decimal(11, 8)
-  dien_tich_ha    Decimal? @db.Decimal(8, 2)
-  nong_san_chinh  String?  @db.VarChar(200)
-  chung_nhan      String?  @db.VarChar(100)
+  model NongDan {
+    user_id         Int      @id
+    ho_ten          String   @db.VarChar(150)
+    so_cmnd_cccd    String?  @unique @db.VarChar(20)
+    tinh_thanh      String   @db.VarChar(100)
+    huyen_xa        String?  @db.VarChar(100)
+    dia_chi_cu_the  String?  @db.Text
+    latitude        Decimal? @db.Decimal(10, 8)
+    longitude       Decimal? @db.Decimal(11, 8)
+    dien_tich_ha    Decimal? @db.Decimal(8, 2)
+    nong_san_chinh  String?  @db.VarChar(200)
+    chung_nhan      String?  @db.VarChar(100)
 
-  /// Bổ sung từ form đăng ký
-  so_dien_thoai   String?  @db.VarChar(15)
-  email_lien_he   String?  @db.VarChar(150)
-  giay_phep_urls  Json?    // Mảng URL giấy tờ, chứng nhận
-  mo_ta_ban_than  String?  @db.Text
+    /// Bổ sung từ form đăng ký
+    so_dien_thoai   String   @unique @db.VarChar(15)
+    email_lien_he   String?  @db.VarChar(150)
+    giay_phep_urls  Json?    // Mảng URL giấy tờ, chứng nhận
+    mo_ta_ban_than  String?  @db.Text
 
-  /// Thông tin kinh doanh bổ sung
-  ma_so_thue             String?  @unique @db.VarChar(20)
-  ten_co_so_kd           String?  @db.VarChar(200)
-  doi_tuong_dang_ky      String?  @db.VarChar(100)
-  thong_tin_xuat_hoa_don Json?
+    /// Thông tin kinh doanh bổ sung
+    ma_so_thue             String?  @unique @db.VarChar(20)
+    ten_co_so_kd           String?  @db.VarChar(200)
+    doi_tuong_dang_ky      String?  @db.VarChar(100)
+    thong_tin_xuat_hoa_don Json?
 
-  diem_trung_binh Decimal  @default(0) @db.Decimal(3, 2)
-  tong_giao_dich  Int      @default(0)
-  trang_thai      TrangThaiTaiKhoan @default(pending)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+    diem_trung_binh Decimal  @default(0) @db.Decimal(3, 2)
+    tong_giao_dich  Int      @default(0)
+    trang_thai      TrangThaiTaiKhoan @default(pending)
+    created_at      DateTime @default(now())
+    updated_at      DateTime @updatedAt
 
-  user            Users    @relation(fields: [user_id], references: [user_id])
+    user            Users    @relation(fields: [user_id], references: [user_id])
 
-  baiDangs        BaiDang[]
-  donHangBan      DonHang[]        @relation("nguoiBan")
+    baiDangs        BaiDang[]
+    donHangBan      DonHang[]        @relation("nguoiBan")
 
-  @@map("nong_dan")
-}
+    @@map("nong_dan")
+  }
 
-// ─────────────────────────────────────────────
-// MODULE 3: DOANH NGHIỆP - Lớp Chuyên Biệt
-// Thông tin và nghiệp vụ của tác nhân Doanh Nghiệp
-// ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // MODULE 3: DOANH NGHIỆP - Lớp Chuyên Biệt
+  // Thông tin và nghiệp vụ của tác nhân Doanh Nghiệp
+  // ─────────────────────────────────────────────
 
-model DoanhNghiep {
-  user_id            Int     @id
-  ten_cong_ty        String  @db.VarChar(200)
-  ma_so_thue         String? @unique @db.VarChar(20)
-  nganh_kinh_doanh   String? @db.VarChar(100)
-  tinh_thanh         String  @db.VarChar(100)
-  dia_chi            String? @db.Text
-  latitude           Decimal? @db.Decimal(10, 8)
-  longitude          Decimal? @db.Decimal(11, 8)
-  website            String?  @db.VarChar(200)
+  model DoanhNghiep {
+    user_id            Int     @id
+    ten_cong_ty        String  @db.VarChar(200)
+    ma_so_thue         String? @unique @db.VarChar(20)
+    nganh_kinh_doanh   String? @db.VarChar(100)
+    tinh_thanh         String  @db.VarChar(100)
+    dia_chi            String? @db.Text
+    latitude           Decimal? @db.Decimal(10, 8)
+    longitude          Decimal? @db.Decimal(11, 8)
+    website            String?  @db.VarChar(200)
 
-  /// Bổ sung từ form đăng ký
-  so_dien_thoai      String? @db.VarChar(15)
-  email_lien_he      String? @db.VarChar(150)
-  giay_phep_kd_url   String? @db.Text
-  mo_ta              String? @db.Text
-  nguoi_dai_dien     String? @db.VarChar(150)
+    /// Bổ sung từ form đăng ký
+    so_dien_thoai      String  @unique @db.VarChar(15)
+    email_lien_he      String? @db.VarChar(150)
+    giay_phep_kd_url   String? @db.Text
+    mo_ta              String? @db.Text
+    nguoi_dai_dien     String? @db.VarChar(150)
   chuc_vu            String? @db.VarChar(100)
 
   diem_trung_binh    Decimal  @default(0) @db.Decimal(3, 2)
@@ -740,6 +743,25 @@ model DiaChiLuu {
   
   @@index([user_id])
   @@map("dia_chi_luu")
+}
+
+// ─────────────────────────────────────────────
+// MODULE 17: THEO DÕI NGƯỜI BÁN (THEO_DOI_NGUOI_BAN)
+// Đăng ký nhận thông báo từ người bán
+// ─────────────────────────────────────────────
+
+model TheoDoiNguoiBan {
+  id         Int      @id @default(autoincrement())
+  buyer_id   Int
+  seller_id  Int
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  buyer      Users    @relation("buyerSubscriptions", fields: [buyer_id], references: [user_id], onDelete: Cascade)
+  seller     Users    @relation("sellerSubscribers", fields: [seller_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([buyer_id, seller_id])
+  @@map("theo_doi_nguoi_ban")
 }
 
 // ============================================================

@@ -70,6 +70,17 @@ export class TinNhanController {
     return this.tinNhanService.getConversations(userId);
   }
 
+  @Get('unread/count')
+  countUnread(@GetUser() currentUser: any) {
+    const userId = Number(currentUser.id || currentUser.user_id || currentUser.sub);
+    return this.tinNhanService.countUnread(userId);
+  }
+
+  @Get('search-user/:phone')
+  async searchUserByPhone(@Param('phone') phone: string) {
+    return this.tinNhanService.searchUserByPhone(phone);
+  }
+
   @Get('conversation/:partnerId')
   getConversation(
     @Param('partnerId', ParseIntPipe) partnerId: number,

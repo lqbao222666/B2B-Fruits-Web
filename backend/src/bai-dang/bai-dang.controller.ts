@@ -13,6 +13,8 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Request,
+  Put,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -158,7 +160,17 @@ export class BaiDangController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.admin, Role.nong_dan)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.service.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = Number(req.user?.id || req.user?.user_id || req.user?.sub);
+    return this.service.remove(id, userId);
+  }
+
+  /// PUT /bai-dang/:id/ngung-cung-cap
+  @Put(':id/ngung-cung-cap')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.admin, Role.nong_dan)
+  ngungCungCap(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    const userId = Number(req.user?.id || req.user?.user_id || req.user?.sub);
+    return this.service.ngungCungCap(id, userId);
   }
 }

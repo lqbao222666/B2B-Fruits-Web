@@ -2,13 +2,19 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { TinNhanRepository } from './tin-nhan.repository';
 import { CreateTinNhanDto } from './dto/create-tin-nhan.dto';
 import { UpdateTinNhanDto } from './dto/update-tin-nhan.dto';
+import { AppGateway } from '../gateway/app.gateway';
 
 @Injectable()
 export class TinNhanService {
-  constructor(private readonly repository: TinNhanRepository) {}
+  constructor(
+    private readonly repository: TinNhanRepository,
+    private readonly gateway: AppGateway,
+  ) {}
 
   async create(createDto: CreateTinNhanDto) {
-    return this.repository.create(createDto);
+    const message = await this.repository.create(createDto);
+    this.gateway.sendToUser(createDto.nguoi_nhan_id, 'new_message', message);
+    return message;
   }
 
   // Lấy danh sách cuộc trò chuyện gần đây
@@ -35,5 +41,13 @@ export class TinNhanService {
   async update(id: number, updateDto: UpdateTinNhanDto) {
     await this.findOne(id);
     return this.repository.update(id, updateDto);
+  }
+
+  async countUnread(userId: number) {
+    return this.repository.countUnread(userId);
+  }
+
+  async searchUserByPhone(phone: string) {
+    return this.repository.searchUserByPhone(phone);
   }
 }

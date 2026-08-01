@@ -64,8 +64,10 @@ export class AuthService {
     });
 
     if (!user) {
-      user = await this.usersService.createGoogleUser(googleUser);
+      user = await this.usersService.createGoogleUser(googleUser) as any;
     }
+
+    if (!user) throw new BadRequestException('User could not be created');
 
     const payload = { sub: user.user_id, email: user.email, role: user.vaiTro ? user.vaiTro.ten_vai_tro : (user as any).role };
     const token = this.jwtService.sign(payload);

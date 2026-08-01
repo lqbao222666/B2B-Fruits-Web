@@ -11,13 +11,15 @@ export class DanhGiaController {
   @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Request() req, @Body() data: CreateDanhGiaDto) {
-    return this.danhGiaService.create(req.user.user_id, data);
+    const userId = Number(req.user?.id || req.user?.user_id || req.user?.sub);
+    return this.danhGiaService.create(userId, data);
   }
 
   @UseGuards(JwtAuthGuard)
   @Put(':id/reply')
   async reply(@Request() req, @Param('id') id: string, @Body() data: ReplyDanhGiaDto) {
-    return this.danhGiaService.reply(+id, req.user.user_id, data);
+    const userId = Number(req.user?.id || req.user?.user_id || req.user?.sub);
+    return this.danhGiaService.reply(+id, userId, data);
   }
 
   @Get('bai-dang/:id')

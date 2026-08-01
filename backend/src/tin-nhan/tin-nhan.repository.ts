@@ -102,4 +102,25 @@ export class TinNhanRepository {
       data,
     });
   }
+
+  async countUnread(userId: number) {
+    return this.prisma.tinNhan.count({
+      where: {
+        nguoi_nhan_id: Number(userId),
+        da_doc: false,
+      },
+    });
+  }
+
+  async searchUserByPhone(phone: string) {
+    const user = await this.prisma.users.findUnique({
+      where: { phone },
+      select: { user_id: true, full_name: true, avatar_url: true, role_id: true }
+    });
+    if (!user) {
+      const { NotFoundException } = require('@nestjs/common');
+      throw new NotFoundException('Không tìm thấy người dùng với số điện thoại này');
+    }
+    return user;
+  }
 }

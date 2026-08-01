@@ -17,6 +17,7 @@ export class UsersRepository {
     const user = await this.prismaService.users.create({
       data: {
         email: registerDto.email,
+        phone: registerDto.phone || `tmp_${Date.now()}_${Math.floor(Math.random()*1000)}`,
         password_hash: registerDto.password_hash,
         full_name: registerDto.full_name,
         vaiTro: { connect: { ten_vai_tro: registerDto.role } },

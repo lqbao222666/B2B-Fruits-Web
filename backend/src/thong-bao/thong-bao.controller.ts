@@ -9,6 +9,7 @@ import {
   Delete,
   ParseIntPipe,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { ThongBaoService } from './thong-bao.service';
 import { CreateThongBaoDto } from './dto/create-thong-bao.dto';
@@ -37,6 +38,12 @@ export class ThongBaoController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.thongBaoService.findOne(id);
+  }
+
+  @Patch('read-all')
+  markAllAsRead(@Request() req) {
+    const user_id = req.user.user_id;
+    return this.thongBaoService.markAllAsRead(user_id);
   }
 
   @Patch(':id/read')

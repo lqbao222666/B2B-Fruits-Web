@@ -36,7 +36,7 @@ export class BaiDangRepository {
     const giaHopLe =
       normalizedGia >= GIA_MIN_PER_KG && normalizedGia <= GIA_MAX_PER_KG;
 
-    return this.prisma.baiDang.create({
+    const baiDang = await this.prisma.baiDang.create({
       data: {
         nguoi_dang_id: data.nguoi_dang_id,
         danhmuc_id: data.danhmuc_id,
@@ -83,6 +83,28 @@ export class BaiDangRepository {
         }
       },
     });
+
+    const sellerInfo = await this.prisma.users.findUnique({ where: { user_id: data.nguoi_dang_id } });
+    const sellerName = sellerInfo?.full_name || 'Nông Dân';
+
+    const subscribers = await this.prisma.theoDoiNguoiBan.findMany({
+      where: { seller_id: data.nguoi_dang_id, is_active: true }
+    });
+
+    if (subscribers.length > 0) {
+      await this.prisma.thongBao.createMany({
+        data: subscribers.map(sub => ({
+          user_id: sub.buyer_id,
+          loai: 'hang_moi',
+          tieu_de: `🌾 Nông sản mới từ ${sellerName}`,
+          noi_dung: `Nhà cung cấp ${sellerName} vừa đăng bán nông sản mới: "${baiDang.ten_nong_san}" (${baiDang.so_luong_co} ${baiDang.don_vi_tinh}).`,
+          ref_id: baiDang.baidang_id,
+          ref_type: 'bai_dang',
+        }))
+      });
+    }
+
+    return baiDang;
   }
 
   /// Danh sách bài đang bán — dành cho Doanh Nghiệp và công khai
@@ -142,7 +164,10 @@ export class BaiDangRepository {
   /// Bài đăng của một nông dân cụ thể
   async findByNongDan(nguoi_dang_id: number) {
     return this.prisma.baiDang.findMany({
-      where: { nguoi_dang_id },
+      where: { 
+        nguoi_dang_id,
+        trang_thai: { not: 'da_xoa' }
+      },
       include: { danhMuc: true, phanLoais: true, tieuChuans: true },
       orderBy: { created_at: 'desc' },
     });
@@ -191,7 +216,7 @@ export class BaiDangRepository {
 
     const { tieu_chuan_ids, phan_loais, ...restData } = data;
 
-    return this.prisma.baiDang.update({
+    const updated = await this.prisma.baiDang.update({
       where: { baidang_id },
       data: {
         ...restData,
@@ -203,6 +228,30 @@ export class BaiDangRepository {
         }),
       },
     });
+
+    if (data.so_luong_con_lai !== undefined || data.so_luong_co !== undefined) {
+       const sellerInfo = await this.prisma.users.findUnique({ where: { user_id: existing.nguoi_dang_id } });
+       const sellerName = sellerInfo?.full_name || 'Nông Dân';
+
+       const subscribers = await this.prisma.theoDoiNguoiBan.findMany({
+         where: { seller_id: existing.nguoi_dang_id, is_active: true }
+       });
+
+       if (subscribers.length > 0) {
+         await this.prisma.thongBao.createMany({
+           data: subscribers.map(sub => ({
+             user_id: sub.buyer_id,
+             loai: 'bai_dang',
+             tieu_de: `📢 Cập nhật số lượng nông sản từ ${sellerName}`,
+             noi_dung: `Nhà cung cấp ${sellerName} vừa cập nhật số lượng sản phẩm "${updated.ten_nong_san}" thành ${updated.so_luong_con_lai} ${updated.don_vi_tinh}.`,
+             ref_id: updated.baidang_id,
+             ref_type: 'bai_dang',
+           }))
+         });
+       }
+    }
+
+    return updated;
   }
 
   /// Admin ẩn bài đăng vi phạm nội dung
@@ -256,23 +305,47 @@ export class BaiDangRepository {
       },
     });
   }
+  async remove(baidang_id: number, nguoi_dang_id: number) {
+    // Để tương thích ngược nếu có chỗ nào gọi remove, chuyển qua xoaBaiDang
+    return this.xoaBaiDang(baidang_id, nguoi_dang_id);
+  }
 
-  async remove(baidang_id: number) {
-    const orderCount = await this.prisma.donHang.count({
-      where: { baidang_id }
-    });
-
-    if (orderCount > 0) {
-      // Soft delete: change status to 'an' because there are existing orders relying on this product
-      return this.prisma.baiDang.update({
-        where: { baidang_id },
-        data: { trang_thai: 'an' }
-      });
+  async ngungCungCap(baidang_id: number, nguoi_dang_id: number) {
+    const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
+    if (!existing) throw new NotFoundException('Không tìm thấy bài đăng');
+    if (existing.nguoi_dang_id !== nguoi_dang_id) {
+      throw new BadRequestException('Bạn không có quyền thực hiện thao tác này');
     }
 
-    // Hard delete if no orders exist
-    return this.prisma.baiDang.delete({
+    await this.prisma.baiDang.update({
       where: { baidang_id },
+      data: {
+        trang_thai: 'an',
+        so_luong_con_lai: 0,
+        phanLoais: {
+          updateMany: {
+            where: { baidang_id },
+            data: { so_luong_con_lai: 0 }
+          }
+        }
+      }
     });
+
+    return { message: 'Đã ngừng cung cấp' };
+  }
+
+  async xoaBaiDang(baidang_id: number, nguoi_dang_id: number) {
+    const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
+    if (!existing) throw new NotFoundException('Không tìm thấy bài đăng');
+    if (existing.nguoi_dang_id !== nguoi_dang_id) {
+      throw new BadRequestException('Bạn không có quyền thực hiện thao tác này');
+    }
+
+    await this.prisma.baiDang.update({
+      where: { baidang_id },
+      data: { trang_thai: 'da_xoa' }
+    });
+
+    return { message: 'Đã xóa bài đăng' };
   }
 }

@@ -40,6 +40,13 @@ export class ThongBaoRepository {
     });
   }
 
+  async markAllAsRead(user_id: number) {
+    return this.prisma.thongBao.updateMany({
+      where: { user_id, da_doc: false },
+      data: { da_doc: true },
+    });
+  }
+
   async remove(tb_id: number) {
     return this.prisma.thongBao.delete({
       where: { tb_id },

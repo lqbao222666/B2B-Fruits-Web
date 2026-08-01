@@ -57,8 +57,15 @@ export class BaiDangService {
     return this.repository.truSoLuong(baidang_id, so_luong_ban);
   }
 
-  async remove(id: number) {
-    await this.findOne(id);
-    return this.repository.remove(id);
+  async remove(id: number, nguoi_dang_id: number) {
+    return this.repository.remove(id, nguoi_dang_id);
+  }
+
+  async ngungCungCap(id: number, nguoi_dang_id: number) {
+    return this.repository.ngungCungCap(id, nguoi_dang_id);
+  }
+
+  async xoaBaiDang(id: number, nguoi_dang_id: number) {
+    return this.repository.xoaBaiDang(id, nguoi_dang_id);
   }
 }

@@ -24,6 +24,8 @@ import { GioHangModule } from './gio-hang/gio-hang.module';
 import { TieuChuanModule } from './tieu-chuan/tieu-chuan.module';
 import { ChungLoaiModule } from './chung-loai/chung-loai.module';
 import { EmailModule } from './email/email.module';
+import { TheoDoiModule } from './theo-doi/theo-doi.module';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { EmailModule } from './email/email.module';
     TieuChuanModule,
     ChungLoaiModule,
     EmailModule,
+    TheoDoiModule,
+    GatewayModule,
   ],
   controllers: [AppController],
   providers: [AppService],
