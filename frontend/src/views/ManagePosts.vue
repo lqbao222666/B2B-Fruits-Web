@@ -177,7 +177,7 @@ const getImageUrl = (images: any) => {
     firstImage = firstImage.url;
   }
   if (typeof firstImage === 'string') {
-    return firstImage.startsWith('http') ? firstImage : `http://localhost:3000${firstImage.startsWith('/') ? '' : '/'}${firstImage}`
+    return firstImage.startsWith('http') ? firstImage : `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${firstImage.startsWith('/') ? '' : '/'}${firstImage}`
   }
   return 'https://placehold.co/100x100?text=Khong+co+anh'
 }

@@ -124,7 +124,7 @@ export const Auth = {
   },
 
   async LoginGoogle(role: string = 'nong_dan') {
-    window.location.href = `http://localhost:3000/auth/google?role=${role}`;
+    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/auth/google?role=${role}`;
   },
 
   saveToken(token: string) {

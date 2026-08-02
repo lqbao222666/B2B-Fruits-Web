@@ -30,7 +30,7 @@ const getImageUrl = (images: any) => {
     const firstImage = images[0]
     const imgUrl = typeof firstImage === 'string' ? firstImage : (firstImage.url || firstImage.image_url || firstImage.hinh_anh_url)
     if (imgUrl) {
-      return imgUrl.startsWith('http') ? imgUrl : `http://localhost:3000${imgUrl}`
+      return imgUrl.startsWith('http') ? imgUrl : `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${imgUrl}`
     }
   }
   return 'https://placehold.co/300x300?text=AgroMarket'

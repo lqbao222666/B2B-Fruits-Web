@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000", // Đảm bảo đúng base URL của bạn
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000", // Đảm bảo đúng base URL của bạn
 });
 
 // THÊM ĐOẠN NÀY: Interceptor giúp tự động đính Token

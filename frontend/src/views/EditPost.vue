@@ -442,7 +442,7 @@ const getFullUrl = (path: any) => {
   if (!path) return ''
   let imgPath = typeof path === 'object' && (path.url || path.image_url) ? (path.url || path.image_url) : path;
   if (typeof imgPath !== 'string') return ''
-  return imgPath.startsWith('http') ? imgPath : `http://localhost:3000${imgPath.startsWith('/') ? '' : '/'}${imgPath}`
+  return imgPath.startsWith('http') ? imgPath : `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${imgPath.startsWith('/') ? '' : '/'}${imgPath}`
 }
 </script>
 

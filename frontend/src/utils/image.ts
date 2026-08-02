@@ -1,4 +1,4 @@
-const BACKEND_URL = 'http://localhost:3000'
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 export const getImageUrl = (input: any, placeholderText = 'Nông Sản'): string => {
   const defaultPlaceholder = `https://placehold.co/400x400/e2e8f0/1e293b?text=${encodeURIComponent(placeholderText)}`

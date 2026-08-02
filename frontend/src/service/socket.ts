@@ -20,7 +20,7 @@ class SocketService {
       this.socket.disconnect();
     }
 
-    this.socket = io('http://localhost:3000', {
+    this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
       auth: {
         token: token
       }
