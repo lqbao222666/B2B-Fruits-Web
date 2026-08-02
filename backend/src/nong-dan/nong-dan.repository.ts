@@ -29,9 +29,24 @@ export class NongDanRepository {
   }
 
   async update(id: number, data: UpdateNongDanDto) {
-    return this.prisma.nongDan.update({
+    const cleanData: any = { ...data };
+    if (cleanData.ma_so_thue === '') cleanData.ma_so_thue = null;
+    if (cleanData.so_cmnd_cccd === '') cleanData.so_cmnd_cccd = null;
+    if (cleanData.email_lien_he === '') cleanData.email_lien_he = null;
+    if (cleanData.user_id) delete cleanData.user_id;
+
+    const user = await this.prisma.users.findUnique({ where: { user_id: id } });
+
+    return this.prisma.nongDan.upsert({
       where: { user_id: id },
-      data,
+      update: cleanData,
+      create: {
+        user_id: id,
+        ho_ten: cleanData.ho_ten || user?.full_name || 'Nông dân',
+        so_dien_thoai: cleanData.so_dien_thoai || user?.phone || `phone_${id}`,
+        tinh_thanh: cleanData.tinh_thanh || 'Chưa cập nhật',
+        ...cleanData,
+      },
     });
   }
 

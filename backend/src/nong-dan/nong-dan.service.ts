@@ -22,7 +22,6 @@ export class NongDanService {
   }
 
   async update(id: number, updateDto: UpdateNongDanDto) {
-    await this.findOne(id); // verify exists
     return this.repository.update(id, updateDto);
   }
 

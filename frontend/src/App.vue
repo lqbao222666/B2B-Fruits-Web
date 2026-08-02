@@ -17,7 +17,7 @@ const isAuthPage = computed(() => {
 </script>
 
 <template>
-  <div class="relative flex min-h-screen flex-col bg-slate-50/60 text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
+  <div class="relative flex min-h-screen flex-col bg-slate-50/60 text-slate-800 antialiased">
     <!-- Soft Decorative Ambient Background Gradients -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
       <div class="absolute -top-40 -left-40 w-96 h-96 bg-emerald-200/30 rounded-full blur-3xl animate-float"></div>

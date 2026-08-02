@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { BaiDang } from '@/service/baidang.ts'
 import { notify } from '@/utils/notifier.ts'
 import api from '@/service/api.ts'
+import Swal from 'sweetalert2'
 
 const router = useRouter()
 const posts = ref<any[]>([])
@@ -78,7 +79,19 @@ const getStatusBadge = (status: string) => {
 }
 
 const deletePost = async (id: number) => {
-  if (!confirm('Xóa bài đăng: Bài đăng sẽ biến mất khỏi hệ thống. Nếu có đơn hàng đang cọc, bài đăng vẫn sẽ được giữ lại (ở dạng ẩn) cho người mua tiếp tục giao dịch. Bạn có chắc chắn muốn xóa?')) return
+  const result = await Swal.fire({
+    title: 'Xóa bài đăng?',
+    text: 'Bài đăng sẽ bị xóa vĩnh viễn khỏi hệ thống. Nếu có đơn hàng đang cọc, bài đăng vẫn sẽ được giữ lại (ở dạng ẩn) cho người mua tiếp tục giao dịch.',
+    icon: 'error',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Vâng, xóa nó!',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
     await BaiDang.delete(id)
     notify.success('Đã xóa bài đăng thành công!')
@@ -89,7 +102,19 @@ const deletePost = async (id: number) => {
 }
 
 const stopProvidingPost = async (id: number) => {
-  if (!confirm('Ngừng cung cấp: Bài đăng sẽ chuyển sang trạng thái Ẩn và Số lượng kho sẽ về 0. Bạn có chắc chắn muốn tiếp tục?')) return
+  const result = await Swal.fire({
+    title: 'Ngừng cung cấp?',
+    text: 'Bài đăng sẽ chuyển sang trạng thái Ẩn và Số lượng kho sẽ về 0. Khách hàng sẽ không thể đặt thêm.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#f97316',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Ngừng cung cấp',
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
     await BaiDang.ngungCungCap(id)
     notify.success('Đã ngừng cung cấp bài đăng!')
@@ -100,8 +125,26 @@ const stopProvidingPost = async (id: number) => {
 }
 
 const toggleVisibility = async (post: any) => {
+  const isCurrentlyHidden = post.trang_thai === 'an';
+  const actionText = isCurrentlyHidden ? 'hiển thị lại' : 'ẩn';
+  
+  const result = await Swal.fire({
+    title: `Bạn muốn ${actionText} bài đăng này?`,
+    text: isCurrentlyHidden 
+      ? 'Bài đăng sẽ xuất hiện trở lại trên danh sách sản phẩm.' 
+      : 'Bài đăng sẽ bị ẩn đi, khách hàng mới sẽ không nhìn thấy nhưng người đã mua vẫn xem được đơn hàng.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: isCurrentlyHidden ? '#2E7D32' : '#f59e0b',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: `Vâng, ${actionText} bài`,
+    cancelButtonText: 'Hủy'
+  });
+
+  if (!result.isConfirmed) return;
+
   try {
-    if (post.trang_thai === 'an') {
+    if (isCurrentlyHidden) {
       await BaiDang.update(post.baidang_id, { trang_thai: 'dang_ban' })
       notify.success('Đã hiển thị lại bài đăng')
     } else {

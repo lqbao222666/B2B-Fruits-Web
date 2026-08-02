@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { BaiDang } from "@/service/baidang.ts";
 import api from "@/service/api.ts";
@@ -261,6 +261,13 @@ onMounted(async () => {
     setTimeout(initMap, 200);
   } catch (err) {
     console.error("Lỗi khi tải danh mục hoặc tiêu chuẩn:", err);
+  }
+});
+
+onUnmounted(() => {
+  if (map) {
+    map.remove()
+    map = null
   }
 });
 

@@ -18,8 +18,12 @@ export class TinNhanRepository {
         da_doc: false,
       },
       include: {
-        nguoiGui: { select: { user_id: true, full_name: true, avatar_url: true } },
-        nguoiNhan: { select: { user_id: true, full_name: true, avatar_url: true } },
+        nguoiGui: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
+        nguoiNhan: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
       },
     });
   }
@@ -34,8 +38,12 @@ export class TinNhanRepository {
       },
       orderBy: { thoi_gian: 'asc' },
       include: {
-        nguoiGui: { select: { user_id: true, full_name: true, avatar_url: true } },
-        nguoiNhan: { select: { user_id: true, full_name: true, avatar_url: true } },
+        nguoiGui: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
+        nguoiNhan: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
       },
     });
   }
@@ -44,22 +52,24 @@ export class TinNhanRepository {
     const uid = Number(userId);
     const messages = await this.prisma.tinNhan.findMany({
       where: {
-        OR: [
-          { nguoi_gui_id: uid },
-          { nguoi_nhan_id: uid },
-        ],
+        OR: [{ nguoi_gui_id: uid }, { nguoi_nhan_id: uid }],
       },
       orderBy: { thoi_gian: 'desc' },
       include: {
-        nguoiGui: { select: { user_id: true, full_name: true, avatar_url: true } },
-        nguoiNhan: { select: { user_id: true, full_name: true, avatar_url: true } },
+        nguoiGui: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
+        nguoiNhan: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
       },
     });
 
     const conversationMap = new Map<number, any>();
 
     for (const msg of messages) {
-      const partnerId = msg.nguoi_gui_id === uid ? msg.nguoi_nhan_id : msg.nguoi_gui_id;
+      const partnerId =
+        msg.nguoi_gui_id === uid ? msg.nguoi_nhan_id : msg.nguoi_gui_id;
       const partner = msg.nguoi_gui_id === uid ? msg.nguoiNhan : msg.nguoiGui;
 
       if (!conversationMap.has(partnerId)) {
@@ -67,7 +77,7 @@ export class TinNhanRepository {
           partnerId,
           partner,
           lastMessage: msg,
-          unreadCount: (msg.nguoi_nhan_id === uid && !msg.da_doc) ? 1 : 0,
+          unreadCount: msg.nguoi_nhan_id === uid && !msg.da_doc ? 1 : 0,
         });
       } else {
         if (msg.nguoi_nhan_id === uid && !msg.da_doc) {
@@ -83,8 +93,12 @@ export class TinNhanRepository {
     return this.prisma.tinNhan.findUnique({
       where: { tinnhan_id: id },
       include: {
-        nguoiGui: { select: { user_id: true, full_name: true, avatar_url: true } },
-        nguoiNhan: { select: { user_id: true, full_name: true, avatar_url: true } },
+        nguoiGui: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
+        nguoiNhan: {
+          select: { user_id: true, full_name: true, avatar_url: true },
+        },
       },
     });
   }
@@ -115,11 +129,18 @@ export class TinNhanRepository {
   async searchUserByPhone(phone: string) {
     const user = await this.prisma.users.findUnique({
       where: { phone },
-      select: { user_id: true, full_name: true, avatar_url: true, role_id: true }
+      select: {
+        user_id: true,
+        full_name: true,
+        avatar_url: true,
+        role_id: true,
+      },
     });
     if (!user) {
       const { NotFoundException } = require('@nestjs/common');
-      throw new NotFoundException('Không tìm thấy người dùng với số điện thoại này');
+      throw new NotFoundException(
+        'Không tìm thấy người dùng với số điện thoại này',
+      );
     }
     return user;
   }

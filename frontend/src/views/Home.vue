@@ -27,9 +27,9 @@ const fetchData = async () => {
     chungLoais.value = clRes.value || clRes || []
     categories.value = catRes.data?.value || catRes.data || []
     const prods = prodRes.data?.value || prodRes.data || []
-    latestProducts.value = Array.isArray(prods) ? prods.slice(0, 10) : []
+    latestProducts.value = Array.isArray(prods) ? prods.slice(0, 12) : []
     const sups = supRes.data?.value || supRes.data || []
-    featuredSuppliers.value = Array.isArray(sups) ? sups : []
+    featuredSuppliers.value = Array.isArray(sups) ? sups.slice(0, 4) : []
   } catch (e) {
     console.error('Home fetch error:', e)
   } finally {
@@ -689,8 +689,8 @@ onMounted(() => {
 /* ═══════════ SUPPLIERS ═══════════ */
 .suppliers-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 32px;
   position: relative;
 }
 .supplier-card {
@@ -793,8 +793,18 @@ onMounted(() => {
 /* ═══════════ PRODUCTS ═══════════ */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
+}
+@media (max-width: 1280px) {
+  .products-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 768px) {
+  .products-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .product-card {
   background: white;

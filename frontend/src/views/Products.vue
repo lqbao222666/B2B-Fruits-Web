@@ -15,7 +15,7 @@ const sortOption = ref('newest')
 
 // Phân trang
 const currentPage = ref(1)
-const itemsPerPage = 15
+const itemsPerPage = 12
 
 // Menu danh mục mobile/desktop
 const isCategoryOpen = ref(false)
@@ -25,6 +25,24 @@ const filterProvince = ref<string>('')
 const filterPriceRange = ref<string>('')
 const filterStandard = ref<string>('')
 const filterMinRating = ref<number>(0)
+const minPriceInput = ref<number | null>(null)
+const maxPriceInput = ref<number | null>(null)
+
+const setPresetPrice = (preset: string) => {
+  filterPriceRange.value = preset
+  minPriceInput.value = null
+  maxPriceInput.value = null
+}
+
+const onCustomPriceInput = () => {
+  filterPriceRange.value = 'custom'
+}
+
+const resetPriceFilter = () => {
+  filterPriceRange.value = ''
+  minPriceInput.value = null
+  maxPriceInput.value = null
+}
 
 // Trích xuất danh sách tỉnh thành và tiêu chuẩn từ posts
 const availableProvinces = computed(() => {
@@ -128,13 +146,22 @@ const filteredAndSortedPosts = computed(() => {
   }
 
   // Lọc theo giá
-  if (filterPriceRange.value) {
-    if (filterPriceRange.value === 'under-50') {
-      list = list.filter(p => p.gia_per_kg < 50000)
-    } else if (filterPriceRange.value === '50-100') {
-      list = list.filter(p => p.gia_per_kg >= 50000 && p.gia_per_kg <= 100000)
-    } else if (filterPriceRange.value === 'over-100') {
-      list = list.filter(p => p.gia_per_kg > 100000)
+  if (filterPriceRange.value === 'under-50') {
+    list = list.filter(p => Number(p.gia_per_kg) < 50000)
+  } else if (filterPriceRange.value === '50-100') {
+    list = list.filter(p => Number(p.gia_per_kg) >= 50000 && Number(p.gia_per_kg) <= 100000)
+  } else if (filterPriceRange.value === 'over-100') {
+    list = list.filter(p => Number(p.gia_per_kg) > 100000)
+  }
+
+  if (filterPriceRange.value === 'custom' || minPriceInput.value !== null || maxPriceInput.value !== null) {
+    if (minPriceInput.value !== null && minPriceInput.value !== undefined && minPriceInput.value >= 0) {
+      const minVnd = Number(minPriceInput.value) * 1000
+      list = list.filter(p => Number(p.gia_per_kg) >= minVnd)
+    }
+    if (maxPriceInput.value !== null && maxPriceInput.value !== undefined && maxPriceInput.value > 0) {
+      const maxVnd = Number(maxPriceInput.value) * 1000
+      list = list.filter(p => Number(p.gia_per_kg) <= maxVnd)
     }
   }
 
@@ -181,7 +208,7 @@ const goToPage = (page: number) => {
   }
 }
 
-watch([searchQuery, sortOption, filterProvince, filterPriceRange, filterStandard, filterMinRating], () => {
+watch([searchQuery, sortOption, filterProvince, filterPriceRange, filterStandard, filterMinRating, minPriceInput, maxPriceInput], () => {
   currentPage.value = 1
 })
 
@@ -226,7 +253,7 @@ onMounted(() => {
       <div v-if="isCategoryOpen" @click="isCategoryOpen = false" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"></div>
     </transition>
 
-    <div class="max-w-[1400px] mx-auto px-4 md:px-8 py-12 font-sans selection:bg-[#E8F5E9] selection:text-[#2E7D32]">
+    <div class="max-w-[1400px] mx-auto px-4 md:px-8 py-12 font-sans">
       
       <!-- TOP BAR -->
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 border-b border-slate-200 pb-6">
@@ -339,20 +366,68 @@ onMounted(() => {
 
               <!-- Mức giá -->
               <div class="space-y-3">
-                <h4 class="font-bold text-sm text-slate-700 uppercase">Mức giá</h4>
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-sm text-slate-700 uppercase">Mức giá</h4>
+                  <button 
+                    v-if="filterPriceRange || minPriceInput || maxPriceInput" 
+                    @click="resetPriceFilter"
+                    class="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+
                 <div class="space-y-2 text-sm text-slate-600 font-medium">
                   <label class="flex items-center gap-2 cursor-pointer hover:text-[#2E7D32]">
-                    <input type="radio" v-model="filterPriceRange" value="" class="accent-[#2E7D32] size-4"> Tất cả
+                    <input type="radio" name="price_preset" :checked="filterPriceRange === '' && !minPriceInput && !maxPriceInput" @change="setPresetPrice('')" class="accent-[#2E7D32] size-4"> Tất cả
                   </label>
                   <label class="flex items-center gap-2 cursor-pointer hover:text-[#2E7D32]">
-                    <input type="radio" v-model="filterPriceRange" value="under-50" class="accent-[#2E7D32] size-4"> Dưới 50.000đ
+                    <input type="radio" name="price_preset" :checked="filterPriceRange === 'under-50'" @change="setPresetPrice('under-50')" class="accent-[#2E7D32] size-4"> Dưới 50.000đ
                   </label>
                   <label class="flex items-center gap-2 cursor-pointer hover:text-[#2E7D32]">
-                    <input type="radio" v-model="filterPriceRange" value="50-100" class="accent-[#2E7D32] size-4"> Từ 50.000đ - 100.000đ
+                    <input type="radio" name="price_preset" :checked="filterPriceRange === '50-100'" @change="setPresetPrice('50-100')" class="accent-[#2E7D32] size-4"> Từ 50.000đ - 100.000đ
                   </label>
                   <label class="flex items-center gap-2 cursor-pointer hover:text-[#2E7D32]">
-                    <input type="radio" v-model="filterPriceRange" value="over-100" class="accent-[#2E7D32] size-4"> Trên 100.000đ
+                    <input type="radio" name="price_preset" :checked="filterPriceRange === 'over-100'" @change="setPresetPrice('over-100')" class="accent-[#2E7D32] size-4"> Trên 100.000đ
                   </label>
+                </div>
+
+                <!-- Nhập giá tùy chỉnh theo số ngàn -->
+                <div class="pt-3 border-t border-slate-100">
+                  <div class="text-xs font-bold text-slate-600 mb-2 flex items-center justify-between">
+                    <span>Khoảng giá tùy chỉnh</span>
+                    <span class="text-[10px] font-normal text-slate-400">(đơn vị: ngàn VNĐ)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                      <input 
+                        type="number" 
+                        v-model.number="minPriceInput" 
+                        @input="onCustomPriceInput" 
+                        placeholder="Từ (vd: 20)" 
+                        min="0" 
+                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#2E7D32] focus:bg-white transition-all placeholder:font-normal placeholder:text-slate-400 pr-6"
+                      />
+                      <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">k</span>
+                    </div>
+                    <span class="text-slate-400 text-xs font-bold">-</span>
+                    <div class="relative flex-1">
+                      <input 
+                        type="number" 
+                        v-model.number="maxPriceInput" 
+                        @input="onCustomPriceInput" 
+                        placeholder="Đến (vd: 150)" 
+                        min="0" 
+                        class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-[#2E7D32] focus:bg-white transition-all placeholder:font-normal placeholder:text-slate-400 pr-6"
+                      />
+                      <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 pointer-events-none">k</span>
+                    </div>
+                  </div>
+
+                  <div v-if="(minPriceInput !== null && minPriceInput !== undefined && minPriceInput > 0) || (maxPriceInput !== null && maxPriceInput !== undefined && maxPriceInput > 0)" class="mt-2.5 text-[11px] font-bold text-[#2E7D32] bg-[#E8F5E9] p-2 rounded-lg border border-[#2E7D32]/20">
+                    Hiển thị: {{ minPriceInput ? (minPriceInput * 1000).toLocaleString('vi-VN') + 'đ' : '0đ' }} 
+                    → {{ maxPriceInput ? (maxPriceInput * 1000).toLocaleString('vi-VN') + 'đ' : 'Không giới hạn' }}
+                  </div>
                 </div>
               </div>
 

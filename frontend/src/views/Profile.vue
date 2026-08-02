@@ -274,49 +274,45 @@ const handleUpdate = async () => {
     const isDoanhNghiep = roleStr === 'doanh_nghiep' || roleStr === 'doanh nghiệp' || roleStr === 'doanh nghiep';
 
     if (isNongDan) {
-      try {
-        await api.patch(`/nong-dan/${profile.accountId}`, {
-          ho_ten: profile.fullName,
-          so_dien_thoai: profile.phone,
-          tinh_thanh: profile.tinh_thanh || profile.address,
-          ma_so_thue: profile.ma_so_thue,
-          ten_co_so_kd: profile.ten_co_so_kd,
-          doi_tuong_dang_ky: profile.doi_tuong_dang_ky,
-          huyen_xa: [profile.quan_huyen, profile.phuong_xa].filter(Boolean).join(', '),
-          dia_chi_cu_the: profile.dia_chi_cu_the,
-          thong_tin_xuat_hoa_don: profile.thong_tin_xuat_hoa_don ? { noi_dung: profile.thong_tin_xuat_hoa_don } : null,
-          giay_phep_urls: profile.giay_phep_urls,
-          so_cmnd_cccd: profile.so_cmnd_cccd,
-          dien_tich_ha: profile.dien_tich_ha,
-          nong_san_chinh: profile.nong_san_chinh,
-          chung_nhan: profile.chung_nhan,
-          mo_ta_ban_than: profile.mo_ta_ban_than,
-          email_lien_he: profile.email_lien_he,
-        })
-      } catch (e) { console.error('Error updating nong_dan:', e) }
+      await api.patch(`/nong-dan/${profile.accountId}`, {
+        ho_ten: profile.fullName || 'Nông dân',
+        so_dien_thoai: profile.phone || '',
+        tinh_thanh: profile.tinh_thanh || profile.address || 'Chưa cập nhật',
+        ma_so_thue: profile.ma_so_thue || '',
+        ten_co_so_kd: profile.ten_co_so_kd || '',
+        doi_tuong_dang_ky: profile.doi_tuong_dang_ky || '',
+        huyen_xa: [profile.quan_huyen, profile.phuong_xa].filter(Boolean).join(', ') || '',
+        dia_chi_cu_the: profile.dia_chi_cu_the || '',
+        thong_tin_xuat_hoa_don: profile.thong_tin_xuat_hoa_don ? { noi_dung: profile.thong_tin_xuat_hoa_don } : undefined,
+        giay_phep_urls: profile.giay_phep_urls || [],
+        so_cmnd_cccd: profile.so_cmnd_cccd || '',
+        dien_tich_ha: profile.dien_tich_ha ? Number(profile.dien_tich_ha) : undefined,
+        nong_san_chinh: profile.nong_san_chinh || '',
+        chung_nhan: profile.chung_nhan || '',
+        mo_ta_ban_than: profile.mo_ta_ban_than || '',
+        email_lien_he: profile.email_lien_he || '',
+      })
     } else if (isDoanhNghiep) {
-      try {
-        await api.patch(`/doanh-nghiep/${profile.accountId}`, {
-          ten_cong_ty: profile.ten_cong_ty,
-          ma_so_thue: profile.ma_so_thue,
-          nganh_kinh_doanh: profile.nganh_kinh_doanh,
-          tinh_thanh: profile.tinh_thanh || profile.address,
-          dia_chi: [profile.dia_chi_cu_the, profile.phuong_xa, profile.quan_huyen].filter(Boolean).join(', '),
-          website: profile.website,
-          so_dien_thoai: profile.phone,
-          email_lien_he: profile.email_lien_he,
-          nguoi_dai_dien: profile.nguoi_dai_dien,
-          chuc_vu: profile.chuc_vu,
-          mo_ta: profile.mo_ta,
-        })
-      } catch (e) { console.error('Error updating doanh_nghiep:', e) }
+      await api.patch(`/doanh-nghiep/${profile.accountId}`, {
+        ten_cong_ty: profile.ten_cong_ty || 'Doanh nghiệp',
+        ma_so_thue: profile.ma_so_thue || '',
+        nganh_kinh_doanh: profile.nganh_kinh_doanh || '',
+        tinh_thanh: profile.tinh_thanh || profile.address || 'Chưa cập nhật',
+        dia_chi: [profile.dia_chi_cu_the, profile.phuong_xa, profile.quan_huyen].filter(Boolean).join(', ') || '',
+        website: profile.website || '',
+        so_dien_thoai: profile.phone || '',
+        email_lien_he: profile.email_lien_he || '',
+        nguoi_dai_dien: profile.nguoi_dai_dien || '',
+        chuc_vu: profile.chuc_vu || '',
+        mo_ta: profile.mo_ta || '',
+      })
     }
 
     isEditing.value = false
     notify.success('Cập nhật thông tin thành công!')
   } catch (error: any) {
     const msg = error.response?.data?.message || 'Cập nhật thất bại'
-    notify.error(msg)
+    notify.error(Array.isArray(msg) ? msg.join(', ') : msg)
   } finally {
     loading.value = false
   }

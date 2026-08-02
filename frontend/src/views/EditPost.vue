@@ -1,9 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { BaiDang } from '@/service/baidang.ts'
 import api from '@/service/api.ts'
 import { notify } from '@/utils/notifier.ts'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png'
+import iconUrl from 'leaflet/dist/images/marker-icon.png'
+import shadowUrl from 'leaflet/dist/images/marker-shadow.png'
+
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl,
+  iconUrl,
+  shadowUrl,
+})
 
 const router = useRouter()
 const route = useRoute()
@@ -13,6 +25,14 @@ const loading = ref(false)
 const fetching = ref(true)
 const isSuggesting = ref(false)
 const suggestingPriceIdx = ref<number | null>(null)
+
+// Map states
+let map: L.Map | null = null
+let userMarker: L.Marker | null = null
+const savedLocations = ref<any[]>([])
+const searchLocationText = ref('')
+const selectedSavedLocation = ref('')
+const isSearching = ref(false)
 
 const vietnamProvinces = [
   "An Giang", "Bà Rịa - Vũng Tàu", "Bạc Liêu", "Bắc Giang", "Bắc Kạn",
@@ -41,13 +61,15 @@ const form = ref({
   don_vi_tinh: 'kg',
   tinh_thanh: '',
   mo_ta: '',
+  latitude: null as number | null,
+  longitude: null as number | null,
   tieu_chuan_ids: [] as number[],
 })
 
 const phanLoais = ref<any[]>([])
 
 const addPhanLoai = () => {
-  phanLoais.value.push({ ten_phan_loai: `Loại ${phanLoais.value.length + 1}`, gia: null, so_luong_co: null })
+  phanLoais.value.push({ ten_phan_loai: `Loại ${phanLoais.value.length + 1}`, gia: null, so_luong_co: null, so_luong_con_lai: null })
 }
 const removePhanLoai = (index: number) => {
   if (phanLoais.value.length > 1) {
@@ -55,11 +77,104 @@ const removePhanLoai = (index: number) => {
   }
 }
 
-const existingImages = ref<string[]>([])
-const selectedImages = ref<File[]>([])
+const existingImages = ref<any[]>([])
+const selectedImages = ref<{ file: File; isMain: boolean }[]>([])
+
+const fetchSavedLocations = async () => {
+  if (!user) return
+  try {
+    const res = await api.get(`/dia-chi-luu/user/${user.user_id || user.id}`)
+    savedLocations.value = res.data || []
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+const initMap = (initLat?: number | null, initLng?: number | null) => {
+  const container = document.getElementById('edit-post-map')
+  if (!container || map) return
+
+  const defaultLat = initLat || 10.762622
+  const defaultLng = initLng || 106.660172
+
+  map = L.map('edit-post-map').setView([defaultLat, defaultLng], initLat ? 14 : 12)
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+  }).addTo(map)
+
+  if (initLat && initLng) {
+    userMarker = L.marker([initLat, initLng])
+      .addTo(map)
+      .bindPopup('Vị trí lô hàng')
+      .openPopup()
+  }
+
+  map.on('click', (e: L.LeafletMouseEvent) => {
+    moveToLocation(e.latlng.lat, e.latlng.lng)
+  })
+}
+
+const moveToLocation = (lat: number, lng: number) => {
+  if (!map) return
+  map.setView([lat, lng], 14)
+  if (userMarker) map.removeLayer(userMarker)
+  userMarker = L.marker([lat, lng])
+    .addTo(map)
+    .bindPopup('Vị trí lô hàng')
+    .openPopup()
+  form.value.latitude = lat
+  form.value.longitude = lng
+}
+
+const handleSearchLocation = async () => {
+  if (!searchLocationText.value) return
+  const text = searchLocationText.value.trim()
+
+  const coordRegex = /^\s*\(?\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*\)?\s*$/
+  const match = text.match(coordRegex)
+  if (match) {
+    const lat = parseFloat(match[1])
+    const lng = parseFloat(match[3])
+    moveToLocation(lat, lng)
+    return
+  }
+
+  isSearching.value = true
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}`
+    )
+    const data = await res.json()
+    if (data && data.length > 0) {
+      const lat = parseFloat(data[0].lat)
+      const lng = parseFloat(data[0].lon)
+      moveToLocation(lat, lng)
+      notify.success('Đã tìm thấy vị trí!')
+    } else {
+      notify.error('Không tìm thấy địa điểm này!')
+    }
+  } catch (e) {
+    notify.error('Lỗi khi tìm kiếm địa điểm!')
+  } finally {
+    isSearching.value = false
+  }
+}
+
+watch(selectedSavedLocation, (val) => {
+  if (val) {
+    const loc = savedLocations.value.find((l) => l.id == val)
+    if (loc) {
+      moveToLocation(Number(loc.latitude), Number(loc.longitude))
+      form.value.tinh_thanh = loc.dia_chi || form.value.tinh_thanh
+    }
+  }
+})
 
 onMounted(async () => {
-  if (!user || (user.role !== 'nong_dan' && user.role !== 'NONG_DAN')) {
+  const roleStr = user?.role ? user.role.toLowerCase() : ''
+  const isNongDan = roleStr === 'nong_dan' || roleStr === 'nông dân' || roleStr === 'nong dan'
+
+  if (!user || !isNongDan) {
     notify.error('Chỉ Nông Dân mới được sửa bài đăng!')
     router.push('/')
     return
@@ -82,36 +197,61 @@ onMounted(async () => {
     }
 
     form.value = {
-      tieu_de: post.tieu_de,
-      ten_nong_san: post.ten_nong_san,
-      danhmuc_id: post.danhmuc_id,
-      don_vi_tinh: post.don_vi_tinh,
-      tinh_thanh: post.tinh_thanh,
-      mo_ta: post.mo_ta,
-      tieu_chuan_ids: post.tieuChuans ? post.tieuChuans.map((tc: any) => tc.tieuchuan_id) : [],
+      tieu_de: post.tieu_de || '',
+      ten_nong_san: post.ten_nong_san || '',
+      danhmuc_id: post.danhmuc_id ? Number(post.danhmuc_id) : '',
+      don_vi_tinh: post.don_vi_tinh || 'kg',
+      tinh_thanh: post.tinh_thanh || '',
+      mo_ta: post.mo_ta || '',
+      latitude: post.latitude ? Number(post.latitude) : null,
+      longitude: post.longitude ? Number(post.longitude) : null,
+      tieu_chuan_ids: post.tieuChuans ? post.tieuChuans.map((tc: any) => Number(tc.tieuchuan_id)) : [],
     }
 
     if (post.phanLoais && post.phanLoais.length > 0) {
       phanLoais.value = post.phanLoais.map((pl: any) => ({
         ten_phan_loai: pl.ten_phan_loai,
-        gia: pl.gia,
-        so_luong_co: pl.so_luong_co,
-        so_luong_con_lai: pl.so_luong_con_lai
+        gia: Number(pl.gia),
+        so_luong_co: Number(pl.so_luong_co),
+        so_luong_con_lai: Number(pl.so_luong_con_lai ?? pl.so_luong_co),
+        original_so_luong_co: Number(pl.so_luong_co),
+        original_so_luong_con_lai: Number(pl.so_luong_con_lai ?? pl.so_luong_co)
       }))
     } else {
       phanLoais.value = [
-        { ten_phan_loai: 'Loại 1', gia: post.gia_per_kg, so_luong_co: post.so_luong_co, so_luong_con_lai: post.so_luong_con_lai }
+        { 
+          ten_phan_loai: 'Loại 1', 
+          gia: Number(post.gia_per_kg || 0), 
+          so_luong_co: Number(post.so_luong_co || 0), 
+          so_luong_con_lai: Number(post.so_luong_con_lai || post.so_luong_co || 0),
+          original_so_luong_co: Number(post.so_luong_co || 0),
+          original_so_luong_con_lai: Number(post.so_luong_con_lai || post.so_luong_co || 0)
+        }
       ]
     }
     
-    existingImages.value = Array.isArray(post.images) ? JSON.parse(JSON.stringify(post.images)) : []
+    let rawImgs = post.images
+    if (typeof rawImgs === 'string') {
+      try { rawImgs = JSON.parse(rawImgs) } catch(e) {}
+    }
+    existingImages.value = Array.isArray(rawImgs) ? JSON.parse(JSON.stringify(rawImgs)) : []
     
+    fetching.value = false
+    fetchSavedLocations()
+    setTimeout(() => {
+      initMap(form.value.latitude, form.value.longitude)
+    }, 200)
   } catch (err) {
     console.error('Lỗi khi tải dữ liệu bài đăng:', err)
     notify.error('Không tìm thấy bài đăng')
     router.push('/manage-posts')
-  } finally {
-    fetching.value = false
+  }
+})
+
+onUnmounted(() => {
+  if (map) {
+    map.remove()
+    map = null
   }
 })
 
@@ -134,17 +274,23 @@ const removeExistingImage = (index: number) => {
 }
 
 const setMainImage = (type: 'existing' | 'new', index: number) => {
-  existingImages.value.forEach(img => img.is_main = false)
+  existingImages.value.forEach(img => {
+    if (typeof img === 'object') img.is_main = false
+  })
   selectedImages.value.forEach(img => img.isMain = false)
   if (type === 'existing') {
-    existingImages.value[index].is_main = true
+    if (typeof existingImages.value[index] === 'object') {
+      existingImages.value[index].is_main = true
+    } else {
+      existingImages.value[index] = { url: existingImages.value[index], is_main: true }
+    }
   } else {
     selectedImages.value[index].isMain = true
   }
 }
 
 const uploadImages = async () => {
-  const urls: { url: string, is_main: boolean }[] = []
+  const urls: { url: string; is_main: boolean }[] = []
   for (const imgObj of selectedImages.value) {
     const formData = new FormData()
     formData.append('file', imgObj.file)
@@ -226,11 +372,19 @@ const handleSuggestPrice = async (index: number) => {
 const handleSubmit = async () => {
   let isValidPhanLoai = true
   let tongSoLuong = 0
+  let tongSoLuongConLai = 0
   let minGia = Infinity
   
   phanLoais.value.forEach(pl => {
     if (!pl.ten_phan_loai || !pl.gia || !pl.so_luong_co) isValidPhanLoai = false
     tongSoLuong += Number(pl.so_luong_co)
+
+    let diff = Number(pl.so_luong_co) - (pl.original_so_luong_co || Number(pl.so_luong_co))
+    let baseConLai = (pl.original_so_luong_con_lai !== undefined && pl.original_so_luong_con_lai !== null) ? Number(pl.original_so_luong_con_lai) : Number(pl.so_luong_co)
+    let calculatedConLai = baseConLai + diff
+    if (calculatedConLai < 0) calculatedConLai = 0
+
+    tongSoLuongConLai += calculatedConLai
     if (Number(pl.gia) < minGia) minGia = Number(pl.gia)
   })
 
@@ -249,19 +403,28 @@ const handleSubmit = async () => {
       ten_nong_san: form.value.ten_nong_san,
       danhmuc_id: Number(form.value.danhmuc_id),
       so_luong_co: tongSoLuong,
-      so_luong_con_lai: tongSoLuong,
+      so_luong_con_lai: tongSoLuongConLai,
       don_vi_tinh: form.value.don_vi_tinh,
       gia_per_kg: minGia === Infinity ? 0 : minGia,
       tinh_thanh: form.value.tinh_thanh,
       mo_ta: form.value.mo_ta,
+      latitude: form.value.latitude ? Number(form.value.latitude) : null,
+      longitude: form.value.longitude ? Number(form.value.longitude) : null,
       tieu_chuan_ids: form.value.tieu_chuan_ids,
       images: finalImages,
-      phan_loais: phanLoais.value.map(pl => ({
-        ten_phan_loai: pl.ten_phan_loai,
-        gia: Number(pl.gia),
-        so_luong_co: Number(pl.so_luong_co),
-        so_luong_con_lai: Number(pl.so_luong_co)
-      }))
+      phan_loais: phanLoais.value.map(pl => {
+        let diff = Number(pl.so_luong_co) - (pl.original_so_luong_co || Number(pl.so_luong_co));
+        let baseConLai = (pl.original_so_luong_con_lai !== undefined && pl.original_so_luong_con_lai !== null) ? Number(pl.original_so_luong_con_lai) : Number(pl.so_luong_co);
+        let calculatedConLai = baseConLai + diff;
+        if (calculatedConLai < 0) calculatedConLai = 0;
+        
+        return {
+          ten_phan_loai: pl.ten_phan_loai,
+          gia: Number(pl.gia),
+          so_luong_co: Number(pl.so_luong_co),
+          so_luong_con_lai: calculatedConLai
+        };
+      })
     }
 
     await BaiDang.update(postId, payload)
@@ -302,7 +465,7 @@ const getFullUrl = (path: any) => {
         </div>
         <div>
           <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Cập nhật Bài Đăng</h1>
-          <p class="text-slate-500 text-sm mt-1 font-medium">Chỉnh sửa thông tin, số lượng và giá của lô hàng.</p>
+          <p class="text-slate-500 text-sm mt-1 font-medium">Chỉnh sửa thông tin, số lượng, giá và vị trí của lô hàng.</p>
         </div>
       </div>
       
@@ -427,6 +590,68 @@ const getFullUrl = (path: any) => {
                     {{ tc.ten_tieu_chuan }}
                   </span>
                 </label>
+              </div>
+            </div>
+
+            <!-- VỊ TRÍ & BẢN ĐỒ LẤY HÀNG -->
+            <div class="mt-4 border-t border-slate-200 pt-4">
+              <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-bold text-slate-700">Tọa độ lấy hàng (Bản đồ)</label>
+                <select
+                  v-if="savedLocations.length > 0"
+                  v-model="selectedSavedLocation"
+                  class="text-xs p-2 border border-slate-200 rounded-lg outline-none bg-white cursor-pointer w-48 text-ellipsis overflow-hidden whitespace-nowrap"
+                >
+                  <option value="">-- Chọn tọa độ đã lưu --</option>
+                  <option
+                    v-for="loc in savedLocations"
+                    :key="loc.id"
+                    :value="loc.id"
+                  >
+                    {{ loc.ten_goi }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Search box -->
+              <div class="flex gap-2 mb-3">
+                <input
+                  v-model="searchLocationText"
+                  @keyup.enter.prevent="handleSearchLocation"
+                  type="text"
+                  placeholder="Nhập địa chỉ hoặc tọa độ (ví dụ: 10.7626, 106.6601) rồi nhấn Tìm..."
+                  class="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-[#2E7D32]"
+                />
+                <button
+                  type="button"
+                  @click="handleSearchLocation"
+                  :disabled="isSearching"
+                  class="px-4 py-2 bg-[#2E7D32] text-white text-xs font-bold rounded-lg hover:bg-[#1B5E20] transition-colors flex items-center gap-1"
+                >
+                  <span
+                    v-if="isSearching"
+                    class="animate-spin material-symbols-outlined text-xs"
+                    >sync</span
+                  >
+                  <span v-else class="material-symbols-outlined text-xs"
+                    >search</span
+                  >
+                  Tìm vị trí
+                </button>
+              </div>
+
+              <!-- Map Container -->
+              <div
+                id="edit-post-map"
+                class="w-full h-64 rounded-xl border border-slate-200 overflow-hidden shadow-inner z-0"
+              ></div>
+
+              <div
+                v-if="form.latitude && form.longitude"
+                class="mt-2 text-xs font-bold text-[#2E7D32] flex items-center gap-1"
+              >
+                <span class="material-symbols-outlined text-sm">location_on</span>
+                Tọa độ đã chọn: {{ form.latitude.toFixed(6) }}, {{ form.longitude.toFixed(6) }}
               </div>
             </div>
           </div>

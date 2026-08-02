@@ -27,6 +27,27 @@ export class UsersRepository {
     });
     const { vaiTro, ...result } = user;
     (result as any).role = vaiTro.ten_vai_tro;
+
+    if (registerDto.role === 'nong_dan') {
+      await this.prismaService.nongDan.create({
+        data: {
+          user_id: user.user_id,
+          ho_ten: user.full_name || 'Nông dân',
+          tinh_thanh: 'Chưa cập nhật',
+          so_dien_thoai: user.phone,
+        },
+      }).catch(() => null);
+    } else if (registerDto.role === 'doanh_nghiep') {
+      await this.prismaService.doanhNghiep.create({
+        data: {
+          user_id: user.user_id,
+          ten_cong_ty: user.full_name || 'Công ty',
+          tinh_thanh: 'Chưa cập nhật',
+          so_dien_thoai: user.phone,
+        },
+      }).catch(() => null);
+    }
+
     return plainToInstance(UserResponseDto, result);
   }
 

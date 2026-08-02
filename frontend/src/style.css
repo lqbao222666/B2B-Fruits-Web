@@ -15,6 +15,16 @@ html {
   font-family: var(--font-display);
 }
 
+::selection {
+  background-color: #34d399;
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background-color: #34d399;
+  color: #ffffff;
+}
+
 body {
   background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 50%, #f0fdfa 100%);
   background-attachment: fixed;

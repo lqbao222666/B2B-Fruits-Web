@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, Min, IsOptional } from 'class-validator';
 
 export class PhanLoaiDto {
   @IsString()
@@ -6,10 +6,15 @@ export class PhanLoaiDto {
   ten_phan_loai: string;
 
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   gia: number;
 
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   so_luong_co: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  so_luong_con_lai?: number;
 }

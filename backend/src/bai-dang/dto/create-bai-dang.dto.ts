@@ -35,7 +35,7 @@ export class CreateBaiDangDto {
 
   /// Số lượng ban đầu của lô hàng
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   so_luong_co: number;
 
   @IsOptional()
@@ -43,9 +43,9 @@ export class CreateBaiDangDto {
   @Min(1)
   so_luong_toi_thieu?: number;
 
-  /// Giá bán theo kg — Nông Dân tự định, hệ thống kiểm tra bất thường
+  /// Giá bán theo kg — Nông Dân tự định
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   gia_per_kg: number;
 
   @IsString()

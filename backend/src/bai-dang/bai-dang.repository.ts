@@ -59,7 +59,7 @@ export class BaiDangRepository {
         images: data.images ?? [],
         video_url: data.video_url,
         is_seasonal: data.is_seasonal ?? false,
-        trang_thai: giaHopLe ? 'dang_ban' : 'cho_duyet',
+        trang_thai: 'dang_ban',
         checked_at: new Date(),
         tieuChuans: data.tieu_chuan_ids && data.tieu_chuan_ids.length > 0
           ? {
@@ -188,33 +188,49 @@ export class BaiDangRepository {
     const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
     if (!existing) throw new NotFoundException('Bài đăng không tồn tại');
 
+    // Khi nông dân cập nhật bài đăng, đặt trạng thái dang_ban trực tiếp ngoại trừ khi hết hàng (so_luong_con_lai <= 0)
     let newTrangThai = data.trang_thai || existing.trang_thai;
-    
-    // Nếu có sự thay đổi về giá hoặc đơn vị tính, kiểm tra lại giá
-    if (data.gia_per_kg !== undefined || data.don_vi_tinh !== undefined) {
-      const gia = data.gia_per_kg !== undefined ? data.gia_per_kg : Number(existing.gia_per_kg);
-      const donVi = data.don_vi_tinh !== undefined ? data.don_vi_tinh : existing.don_vi_tinh;
-      
-      const normalizedGia = donVi === 'tấn' ? gia / 1000 : gia;
-      const giaHopLe = normalizedGia >= GIA_MIN_PER_KG && normalizedGia <= GIA_MAX_PER_KG;
-      
-      if (!giaHopLe) {
-        newTrangThai = 'cho_duyet'; // Giá bất thường -> bắt buộc chờ duyệt
-      } else if (existing.trang_thai === 'cho_duyet') {
-        // Đã sửa lại giá hợp lệ nhưng vẫn phải chờ admin duyệt lại (không tự động)
-        newTrangThai = 'cho_duyet';
-      }
-    }
-
-    if (data.so_luong_con_lai !== undefined) {
-      if (Number(data.so_luong_con_lai) > 0 && existing.trang_thai === 'da_ban') {
-        newTrangThai = 'dang_ban';
-      } else if (Number(data.so_luong_con_lai) <= 0) {
-        newTrangThai = 'da_ban';
-      }
+    if (data.so_luong_con_lai !== undefined && Number(data.so_luong_con_lai) <= 0) {
+      newTrangThai = 'da_ban';
+    } else if (newTrangThai === 'cho_duyet' || !newTrangThai) {
+      newTrangThai = 'dang_ban';
     }
 
     const { tieu_chuan_ids, phan_loais, ...restData } = data;
+
+    if (phan_loais && phan_loais.length > 0) {
+      const existingPhanLoais = await this.prisma.phanLoaiSanPham.findMany({ where: { baidang_id } });
+      
+      for (const pl of phan_loais) {
+        const existingPl = existingPhanLoais.find(e => e.ten_phan_loai === pl.ten_phan_loai);
+        if (existingPl) {
+          await this.prisma.phanLoaiSanPham.update({
+            where: { phanloai_id: existingPl.phanloai_id },
+            data: {
+              gia: pl.gia,
+              so_luong_co: pl.so_luong_co,
+              so_luong_con_lai: pl.so_luong_con_lai ?? pl.so_luong_co,
+            }
+          });
+        } else {
+          await this.prisma.phanLoaiSanPham.create({
+            data: {
+              baidang_id,
+              ten_phan_loai: pl.ten_phan_loai,
+              gia: pl.gia,
+              so_luong_co: pl.so_luong_co,
+              so_luong_con_lai: pl.so_luong_con_lai ?? pl.so_luong_co,
+            }
+          });
+        }
+      }
+
+      const currentNames = phan_loais.map(p => p.ten_phan_loai);
+      await this.prisma.phanLoaiSanPham.updateMany({
+        where: { baidang_id, ten_phan_loai: { notIn: currentNames } },
+        data: { so_luong_con_lai: 0 }
+      });
+    }
 
     const updated = await this.prisma.baiDang.update({
       where: { baidang_id },
@@ -227,6 +243,7 @@ export class BaiDangRepository {
           },
         }),
       },
+      include: INCLUDE_FULL,
     });
 
     if (data.so_luong_con_lai !== undefined || data.so_luong_co !== undefined) {

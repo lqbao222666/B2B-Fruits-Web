@@ -6,6 +6,7 @@ import {
   IsEnum,
   IsArray,
   IsNotEmpty,
+  IsObject,
 } from 'class-validator';
 import { TrangThaiTaiKhoan } from '@prisma/client';
 
@@ -68,6 +69,22 @@ export class CreateNongDanDto {
   @IsOptional()
   @IsString()
   email_lien_he?: string;
+
+  @IsOptional()
+  @IsString()
+  ma_so_thue?: string;
+
+  @IsOptional()
+  @IsString()
+  ten_co_so_kd?: string;
+
+  @IsOptional()
+  @IsString()
+  doi_tuong_dang_ky?: string;
+
+  @IsOptional()
+  @IsObject()
+  thong_tin_xuat_hoa_don?: any;
 
   @IsOptional()
   @IsEnum(TrangThaiTaiKhoan)

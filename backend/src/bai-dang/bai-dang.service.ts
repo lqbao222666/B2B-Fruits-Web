@@ -1,11 +1,26 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { BaiDangRepository } from './bai-dang.repository';
 import { CreateBaiDangDto } from './dto/create-bai-dang.dto';
 import { UpdateBaiDangDto } from './dto/update-bai-dang.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
-export class BaiDangService {
-  constructor(private readonly repository: BaiDangRepository) {}
+export class BaiDangService implements OnModuleInit {
+  constructor(
+    private readonly repository: BaiDangRepository,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  async onModuleInit() {
+    try {
+      await this.prisma.baiDang.updateMany({
+        where: { trang_thai: 'cho_duyet' },
+        data: { trang_thai: 'dang_ban' },
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
 
   /// Nông Dân đăng bài với giá tự định — hệ thống kiểm tra tự động
   async create(createDto: CreateBaiDangDto) {

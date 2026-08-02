@@ -25,9 +25,23 @@ export class DoanhNghiepRepository {
   }
 
   async update(id: number, data: UpdateDoanhNghiepDto) {
-    return this.prisma.doanhNghiep.update({
+    const cleanData: any = { ...data };
+    if (cleanData.ma_so_thue === '') cleanData.ma_so_thue = null;
+    if (cleanData.email_lien_he === '') cleanData.email_lien_he = null;
+    if (cleanData.user_id) delete cleanData.user_id;
+
+    const user = await this.prisma.users.findUnique({ where: { user_id: id } });
+
+    return this.prisma.doanhNghiep.upsert({
       where: { user_id: id },
-      data,
+      update: cleanData,
+      create: {
+        user_id: id,
+        ten_cong_ty: cleanData.ten_cong_ty || user?.full_name || 'Doanh nghiệp',
+        so_dien_thoai: cleanData.so_dien_thoai || user?.phone || `phone_${id}`,
+        tinh_thanh: cleanData.tinh_thanh || 'Chưa cập nhật',
+        ...cleanData,
+      },
     });
   }
 
