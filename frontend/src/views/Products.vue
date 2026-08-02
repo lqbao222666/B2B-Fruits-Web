@@ -244,6 +244,11 @@ onMounted(() => {
   fetchCategories()
   fetchPosts()
 })
+
+const handleImageError = (e: Event) => {
+  const target = e.target as HTMLImageElement;
+  if (target) target.src = 'https://placehold.co/400x400/e2e8f0/1e293b?text=N%C3%B4ng+S%E1%BA%A3n';
+}
 </script>
 
 <template>
@@ -518,7 +523,7 @@ onMounted(() => {
             <div v-for="post in paginatedPosts" :key="post.baidang_id" class="group bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-200 hover:border-[#2E7D32]/40 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col p-3 relative">
               
               <div class="aspect-square relative overflow-hidden rounded-[18px] bg-slate-50 mb-4 cursor-pointer" @click="router.push(`/product/${post.baidang_id}`)">
-                <img :src="getImageUrl(post)" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" :alt="post.ten_nong_san || post.tieu_de" @error="(e) => { e.target.src = 'https://placehold.co/400x400/e2e8f0/1e293b?text=N%C3%B4ng+S%E1%BA%A3n' }" />
+                <img :src="getImageUrl(post)" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" :alt="post.ten_nong_san || post.tieu_de" @error="handleImageError" />
                 <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300"></div>
 
                 <div class="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-xl shadow-sm flex items-center gap-1.5 text-xs font-bold z-10 text-slate-700">

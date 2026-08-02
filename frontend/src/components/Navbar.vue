@@ -70,7 +70,7 @@ const checkAuth = () => {
       socketService.connect();
       socketService.on('new_message', () => {
         updateUnreadMessageCount();
-        if (route.path !== '/messages') {
+        if (router.currentRoute.value.path !== '/messages') {
           notify.info('Bạn có tin nhắn mới');
         }
       });

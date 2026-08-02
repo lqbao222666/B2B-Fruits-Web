@@ -213,7 +213,6 @@ const handleSearchLocation = async () => {
   }
 };
 
-import { watch } from "vue";
 watch(selectedSavedLocation, (val) => {
   if (val) {
     const loc = savedLocations.value.find((l) => l.id == val);

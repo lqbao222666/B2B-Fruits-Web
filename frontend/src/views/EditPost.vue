@@ -199,7 +199,7 @@ onMounted(async () => {
     form.value = {
       tieu_de: post.tieu_de || '',
       ten_nong_san: post.ten_nong_san || '',
-      danhmuc_id: post.danhmuc_id ? Number(post.danhmuc_id) : '',
+      danhmuc_id: post.danhmuc_id ? String(post.danhmuc_id) : '',
       don_vi_tinh: post.don_vi_tinh || 'kg',
       tinh_thanh: post.tinh_thanh || '',
       mo_ta: post.mo_ta || '',

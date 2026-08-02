@@ -19,8 +19,6 @@ const isLoadingMessages = ref(false)
 const isSending = ref(false)
 const messagesContainer = ref<HTMLElement | null>(null)
 
-let pollingInterval: any = null
-
 const openMedia = (url: string) => {
   window.open(url, '_blank')
 }
