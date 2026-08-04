@@ -55,7 +55,8 @@ export class AuthController {
   @UseGuards(GoogleOAuthGuard)
   async googleAuthRedirect(@Request() req, @Res() res) {
     const result = await this.authService.validateGoogleUser(req.user);
-    const frontendUrl = `http://localhost:5173/login?token=${result.token}&id=${result.user.user_id}&email=${result.user.email}&role=${result.user.role}`;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = `${baseUrl.replace(/\/$/, '')}/login?token=${result.token}&id=${result.user.user_id}&email=${result.user.email}&role=${result.user.role}`;
     return res.redirect(frontendUrl);
   }
 }
