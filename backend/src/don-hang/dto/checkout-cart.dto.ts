@@ -1,4 +1,10 @@
-import { IsArray, IsInt, IsString, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsArray,
+  IsInt,
+  IsString,
+  IsOptional,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { HinhThucGiaoHang } from '@prisma/client';
 

@@ -21,8 +21,8 @@ const INCLUDE_FULL = {
 };
 
 /// Ngưỡng kiểm tra giá bất thường (có thể chuyển vào config sau)
-const GIA_MIN_PER_KG = 100;       // 100 đ/kg
-const GIA_MAX_PER_KG = 500_000;   // 500.000 đ/kg
+const GIA_MIN_PER_KG = 100; // 100 đ/kg
+const GIA_MAX_PER_KG = 500_000; // 500.000 đ/kg
 
 @Injectable()
 export class BaiDangRepository {
@@ -32,7 +32,8 @@ export class BaiDangRepository {
   /// so_luong_con_lai = so_luong_co (mới đăng, chưa bán gì).
   /// Thuật toán kiểm tra giá cơ bản: nếu hợp lệ → dang_ban, nếu bất thường → cho_duyet.
   async create(data: CreateBaiDangDto) {
-    const normalizedGia = data.don_vi_tinh === 'tấn' ? data.gia_per_kg / 1000 : data.gia_per_kg;
+    const normalizedGia =
+      data.don_vi_tinh === 'tấn' ? data.gia_per_kg / 1000 : data.gia_per_kg;
     const giaHopLe =
       normalizedGia >= GIA_MIN_PER_KG && normalizedGia <= GIA_MAX_PER_KG;
 
@@ -61,46 +62,54 @@ export class BaiDangRepository {
         is_seasonal: data.is_seasonal ?? false,
         trang_thai: 'dang_ban',
         checked_at: new Date(),
-        tieuChuans: data.tieu_chuan_ids && data.tieu_chuan_ids.length > 0
-          ? {
-              connect: data.tieu_chuan_ids.map((id) => ({ tieuchuan_id: id })),
-            }
-          : undefined,
+        tieuChuans:
+          data.tieu_chuan_ids && data.tieu_chuan_ids.length > 0
+            ? {
+                connect: data.tieu_chuan_ids.map((id) => ({
+                  tieuchuan_id: id,
+                })),
+              }
+            : undefined,
         phanLoais: {
-          create: data.phan_loais && data.phan_loais.length > 0
-            ? data.phan_loais.map(pl => ({
-                ten_phan_loai: pl.ten_phan_loai,
-                gia: pl.gia,
-                so_luong_co: pl.so_luong_co,
-                so_luong_con_lai: pl.so_luong_co,
-              }))
-            : [{
-                ten_phan_loai: 'Loại 1',
-                gia: data.gia_per_kg,
-                so_luong_co: data.so_luong_co,
-                so_luong_con_lai: data.so_luong_co,
-              }]
-        }
+          create:
+            data.phan_loais && data.phan_loais.length > 0
+              ? data.phan_loais.map((pl) => ({
+                  ten_phan_loai: pl.ten_phan_loai,
+                  gia: pl.gia,
+                  so_luong_co: pl.so_luong_co,
+                  so_luong_con_lai: pl.so_luong_co,
+                }))
+              : [
+                  {
+                    ten_phan_loai: 'Loại 1',
+                    gia: data.gia_per_kg,
+                    so_luong_co: data.so_luong_co,
+                    so_luong_con_lai: data.so_luong_co,
+                  },
+                ],
+        },
       },
     });
 
-    const sellerInfo = await this.prisma.users.findUnique({ where: { user_id: data.nguoi_dang_id } });
+    const sellerInfo = await this.prisma.users.findUnique({
+      where: { user_id: data.nguoi_dang_id },
+    });
     const sellerName = sellerInfo?.full_name || 'Nông Dân';
 
     const subscribers = await this.prisma.theoDoiNguoiBan.findMany({
-      where: { seller_id: data.nguoi_dang_id, is_active: true }
+      where: { seller_id: data.nguoi_dang_id, is_active: true },
     });
 
     if (subscribers.length > 0) {
       await this.prisma.thongBao.createMany({
-        data: subscribers.map(sub => ({
+        data: subscribers.map((sub) => ({
           user_id: sub.buyer_id,
           loai: 'hang_moi',
           tieu_de: `🌾 Nông sản mới từ ${sellerName}`,
           noi_dung: `Nhà cung cấp ${sellerName} vừa đăng bán nông sản mới: "${baiDang.ten_nong_san}" (${baiDang.so_luong_co} ${baiDang.don_vi_tinh}).`,
           ref_id: baiDang.baidang_id,
           ref_type: 'bai_dang',
-        }))
+        })),
       });
     }
 
@@ -164,9 +173,9 @@ export class BaiDangRepository {
   /// Bài đăng của một nông dân cụ thể
   async findByNongDan(nguoi_dang_id: number) {
     return this.prisma.baiDang.findMany({
-      where: { 
+      where: {
         nguoi_dang_id,
-        trang_thai: { not: 'da_xoa' }
+        trang_thai: { not: 'da_xoa' },
       },
       include: { danhMuc: true, phanLoais: true, tieuChuans: true },
       orderBy: { created_at: 'desc' },
@@ -185,12 +194,17 @@ export class BaiDangRepository {
   }
 
   async update(baidang_id: number, data: UpdateBaiDangDto) {
-    const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
+    const existing = await this.prisma.baiDang.findUnique({
+      where: { baidang_id },
+    });
     if (!existing) throw new NotFoundException('Bài đăng không tồn tại');
 
     // Khi nông dân cập nhật bài đăng, đặt trạng thái dang_ban trực tiếp ngoại trừ khi hết hàng (so_luong_con_lai <= 0)
     let newTrangThai = data.trang_thai || existing.trang_thai;
-    if (data.so_luong_con_lai !== undefined && Number(data.so_luong_con_lai) <= 0) {
+    if (
+      data.so_luong_con_lai !== undefined &&
+      Number(data.so_luong_con_lai) <= 0
+    ) {
       newTrangThai = 'da_ban';
     } else if (newTrangThai === 'cho_duyet' || !newTrangThai) {
       newTrangThai = 'dang_ban';
@@ -199,10 +213,14 @@ export class BaiDangRepository {
     const { tieu_chuan_ids, phan_loais, ...restData } = data;
 
     if (phan_loais && phan_loais.length > 0) {
-      const existingPhanLoais = await this.prisma.phanLoaiSanPham.findMany({ where: { baidang_id } });
-      
+      const existingPhanLoais = await this.prisma.phanLoaiSanPham.findMany({
+        where: { baidang_id },
+      });
+
       for (const pl of phan_loais) {
-        const existingPl = existingPhanLoais.find(e => e.ten_phan_loai === pl.ten_phan_loai);
+        const existingPl = existingPhanLoais.find(
+          (e) => e.ten_phan_loai === pl.ten_phan_loai,
+        );
         if (existingPl) {
           await this.prisma.phanLoaiSanPham.update({
             where: { phanloai_id: existingPl.phanloai_id },
@@ -210,7 +228,7 @@ export class BaiDangRepository {
               gia: pl.gia,
               so_luong_co: pl.so_luong_co,
               so_luong_con_lai: pl.so_luong_con_lai ?? pl.so_luong_co,
-            }
+            },
           });
         } else {
           await this.prisma.phanLoaiSanPham.create({
@@ -220,15 +238,15 @@ export class BaiDangRepository {
               gia: pl.gia,
               so_luong_co: pl.so_luong_co,
               so_luong_con_lai: pl.so_luong_con_lai ?? pl.so_luong_co,
-            }
+            },
           });
         }
       }
 
-      const currentNames = phan_loais.map(p => p.ten_phan_loai);
+      const currentNames = phan_loais.map((p) => p.ten_phan_loai);
       await this.prisma.phanLoaiSanPham.updateMany({
         where: { baidang_id, ten_phan_loai: { notIn: currentNames } },
-        data: { so_luong_con_lai: 0 }
+        data: { so_luong_con_lai: 0 },
       });
     }
 
@@ -247,25 +265,27 @@ export class BaiDangRepository {
     });
 
     if (data.so_luong_con_lai !== undefined || data.so_luong_co !== undefined) {
-       const sellerInfo = await this.prisma.users.findUnique({ where: { user_id: existing.nguoi_dang_id } });
-       const sellerName = sellerInfo?.full_name || 'Nông Dân';
+      const sellerInfo = await this.prisma.users.findUnique({
+        where: { user_id: existing.nguoi_dang_id },
+      });
+      const sellerName = sellerInfo?.full_name || 'Nông Dân';
 
-       const subscribers = await this.prisma.theoDoiNguoiBan.findMany({
-         where: { seller_id: existing.nguoi_dang_id, is_active: true }
-       });
+      const subscribers = await this.prisma.theoDoiNguoiBan.findMany({
+        where: { seller_id: existing.nguoi_dang_id, is_active: true },
+      });
 
-       if (subscribers.length > 0) {
-         await this.prisma.thongBao.createMany({
-           data: subscribers.map(sub => ({
-             user_id: sub.buyer_id,
-             loai: 'bai_dang',
-             tieu_de: `📢 Cập nhật số lượng nông sản từ ${sellerName}`,
-             noi_dung: `Nhà cung cấp ${sellerName} vừa cập nhật số lượng sản phẩm "${updated.ten_nong_san}" thành ${updated.so_luong_con_lai} ${updated.don_vi_tinh}.`,
-             ref_id: updated.baidang_id,
-             ref_type: 'bai_dang',
-           }))
-         });
-       }
+      if (subscribers.length > 0) {
+        await this.prisma.thongBao.createMany({
+          data: subscribers.map((sub) => ({
+            user_id: sub.buyer_id,
+            loai: 'bai_dang',
+            tieu_de: `📢 Cập nhật số lượng nông sản từ ${sellerName}`,
+            noi_dung: `Nhà cung cấp ${sellerName} vừa cập nhật số lượng sản phẩm "${updated.ten_nong_san}" thành ${updated.so_luong_con_lai} ${updated.don_vi_tinh}.`,
+            ref_id: updated.baidang_id,
+            ref_type: 'bai_dang',
+          })),
+        });
+      }
     }
 
     return updated;
@@ -328,10 +348,14 @@ export class BaiDangRepository {
   }
 
   async ngungCungCap(baidang_id: number, nguoi_dang_id: number) {
-    const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
+    const existing = await this.prisma.baiDang.findUnique({
+      where: { baidang_id },
+    });
     if (!existing) throw new NotFoundException('Không tìm thấy bài đăng');
     if (existing.nguoi_dang_id !== nguoi_dang_id) {
-      throw new BadRequestException('Bạn không có quyền thực hiện thao tác này');
+      throw new BadRequestException(
+        'Bạn không có quyền thực hiện thao tác này',
+      );
     }
 
     await this.prisma.baiDang.update({
@@ -342,25 +366,29 @@ export class BaiDangRepository {
         phanLoais: {
           updateMany: {
             where: { baidang_id },
-            data: { so_luong_con_lai: 0 }
-          }
-        }
-      }
+            data: { so_luong_con_lai: 0 },
+          },
+        },
+      },
     });
 
     return { message: 'Đã ngừng cung cấp' };
   }
 
   async xoaBaiDang(baidang_id: number, nguoi_dang_id: number) {
-    const existing = await this.prisma.baiDang.findUnique({ where: { baidang_id } });
+    const existing = await this.prisma.baiDang.findUnique({
+      where: { baidang_id },
+    });
     if (!existing) throw new NotFoundException('Không tìm thấy bài đăng');
     if (existing.nguoi_dang_id !== nguoi_dang_id) {
-      throw new BadRequestException('Bạn không có quyền thực hiện thao tác này');
+      throw new BadRequestException(
+        'Bạn không có quyền thực hiện thao tác này',
+      );
     }
 
     await this.prisma.baiDang.update({
       where: { baidang_id },
-      data: { trang_thai: 'da_xoa' }
+      data: { trang_thai: 'da_xoa' },
     });
 
     return { message: 'Đã xóa bài đăng' };

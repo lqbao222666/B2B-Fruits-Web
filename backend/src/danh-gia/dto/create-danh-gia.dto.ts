@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, IsArray } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  IsArray,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateDanhGiaDto {

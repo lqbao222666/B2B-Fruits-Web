@@ -50,7 +50,9 @@ export class EmailService {
       this.logger.log(`OTP Email sent successfully to ${to}`);
       return true;
     } catch (error: any) {
-      this.logger.error(`Failed to send OTP Email to ${to}: ${error?.message || error}`);
+      this.logger.error(
+        `Failed to send OTP Email to ${to}: ${error?.message || error}`,
+      );
       // Fallback debug log so developer/testing can proceed even if SMTP credentials fail
       this.logger.warn(`[DEV FALLBACK OTP] For ${to}: ${otp}`);
       return true;

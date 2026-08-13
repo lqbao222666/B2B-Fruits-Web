@@ -43,6 +43,26 @@ export class CreateNongDanDto {
   longitude?: number;
 
   @IsOptional()
+  @IsString()
+  phuong_thuc_nhan_tien?: string;
+
+  @IsOptional()
+  @IsString()
+  ngan_hang?: string;
+
+  @IsOptional()
+  @IsString()
+  so_tai_khoan?: string;
+
+  @IsOptional()
+  @IsString()
+  chu_tai_khoan?: string;
+
+  @IsOptional()
+  @IsNumber()
+  diem_trung_binh?: number;
+
+  @IsOptional()
   @IsNumber()
   dien_tich_ha?: number;
 

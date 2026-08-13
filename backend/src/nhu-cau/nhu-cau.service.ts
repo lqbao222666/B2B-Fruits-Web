@@ -11,7 +11,12 @@ export class NhuCauService {
     return this.repository.create(createDto);
   }
 
-  async findAll(query?: { ten_nong_san?: string; tinh_thanh_giao?: string }) {
+  async findAll(query?: {
+    ten_nong_san?: string;
+    tinh_thanh_giao?: string;
+    danhmuc_id?: number;
+    trang_thai?: string;
+  }) {
     return this.repository.findAll(query);
   }
 

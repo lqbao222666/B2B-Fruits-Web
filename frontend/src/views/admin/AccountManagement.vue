@@ -1,37 +1,39 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { UsersAdmin } from '@/service/users.ts'
-import { notify } from '@/utils/notifier.ts'
+import { ref, onMounted } from "vue";
+import { UsersAdmin } from "@/service/users.ts";
+import { notify } from "@/utils/notifier.ts";
 
-const users = ref<any[]>([])
-const loading = ref(true)
+const users = ref<any[]>([]);
+const loading = ref(true);
 
 const loadUsers = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await UsersAdmin.getAll()
+    const res = await UsersAdmin.getAll();
     // Backend trả về mảng user
-    users.value = Array.isArray(res) ? res : res.data || []
+    users.value = Array.isArray(res) ? res : res.data || [];
   } catch (error) {
-    notify.error('Lỗi khi tải danh sách người dùng')
+    notify.error("Lỗi khi tải danh sách người dùng");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const toggleActive = async (user: any) => {
   try {
-    await UsersAdmin.updateActive(user.user_id || user.id, !user.is_active)
-    user.is_active = !user.is_active
-    notify.success(`Đã ${user.is_active ? 'mở khóa' : 'khóa'} tài khoản ${user.email}`)
+    await UsersAdmin.updateActive(user.user_id || user.id, !user.is_active);
+    user.is_active = !user.is_active;
+    notify.success(
+      `Đã ${user.is_active ? "mở khóa" : "khóa"} tài khoản ${user.email}`,
+    );
   } catch (err) {
-    notify.error('Lỗi khi cập nhật trạng thái')
+    notify.error("Lỗi khi cập nhật trạng thái");
   }
-}
+};
 
 onMounted(() => {
-  loadUsers()
-})
+  loadUsers();
+});
 </script>
 
 <template>
@@ -64,35 +66,51 @@ onMounted(() => {
         </thead>
         <tbody>
           <tr v-if="users.length === 0">
-            <td colspan="8" class="text-center py-8 text-gray-500">Chưa có người dùng nào</td>
+            <td colspan="8" class="text-center py-8 text-gray-500">
+              Chưa có người dùng nào
+            </td>
           </tr>
           <tr v-for="u in users" :key="u.user_id || u.id">
             <td class="font-medium text-gray-500">#{{ u.user_id || u.id }}</td>
             <td class="font-semibold text-gray-800">{{ u.email }}</td>
-            <td>{{ u.full_name || u.ho_ten || u.ten_cong_ty || '-' }}</td>
+            <td>{{ u.full_name || u.ho_ten || u.ten_cong_ty || "-" }}</td>
             <td>
-              <span class="role-badge" :class="u.role === 'ADMIN' ? 'bg-red-100 text-red-700' : u.role === 'DOANH_NGHIEP' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'">
+              <span
+                class="role-badge"
+                :class="
+                  u.role === 'ADMIN'
+                    ? 'bg-red-100 text-red-700'
+                    : u.role === 'DOANH_NGHIEP'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-green-100 text-green-700'
+                "
+              >
                 {{ u.role || u.vaiTro?.ten_vai_tro }}
               </span>
             </td>
-            <td>{{ u.phone || u.so_dien_thoai || '-' }}</td>
+            <td>{{ u.phone || u.so_dien_thoai || "-" }}</td>
             <td class="text-gray-500 text-sm">
-              {{ new Date(u.created_at).toLocaleDateString('vi-VN') }}
+              {{ new Date(u.created_at).toLocaleDateString("vi-VN") }}
             </td>
             <td>
-              <div class="status-badge" :class="u.is_active ? 'status-active' : 'status-locked'">
+              <div
+                class="status-badge"
+                :class="u.is_active ? 'status-active' : 'status-locked'"
+              >
                 <span class="status-dot"></span>
-                {{ u.is_active ? 'Hoạt động' : 'Đã khóa' }}
+                {{ u.is_active ? "Hoạt động" : "Đã khóa" }}
               </div>
             </td>
             <td class="text-right">
-              <button 
+              <button
                 @click="toggleActive(u)"
                 class="action-btn"
                 :class="u.is_active ? 'btn-lock' : 'btn-unlock'"
                 :title="u.is_active ? 'Khóa tài khoản' : 'Mở khóa'"
               >
-                <span class="material-symbols-outlined">{{ u.is_active ? 'lock' : 'lock_open' }}</span>
+                <span class="material-symbols-outlined">{{
+                  u.is_active ? "lock" : "lock_open"
+                }}</span>
               </button>
             </td>
           </tr>
@@ -126,18 +144,24 @@ onMounted(() => {
   background: white;
   border: 1px solid #ddd;
   border-radius: 8px;
-  width: 40px; height: 40px;
-  display: flex; align-items: center; justify-content: center;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: #555;
   transition: all 0.2s;
 }
-.refresh-btn:hover { background: #f5f5f5; color: #2E7D32; }
+.refresh-btn:hover {
+  background: #f5f5f5;
+  color: #2e7d32;
+}
 
 .table-card {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid #f0f0f0;
   overflow: hidden;
 }
@@ -187,13 +211,25 @@ onMounted(() => {
   font-size: 0.8rem;
   font-weight: 600;
 }
-.status-active { background: #ecfdf5; color: #059669; }
-.status-locked { background: #fef2f2; color: #dc2626; }
-.status-dot {
-  width: 6px; height: 6px; border-radius: 50%;
+.status-active {
+  background: #ecfdf5;
+  color: #059669;
 }
-.status-active .status-dot { background: #10b981; }
-.status-locked .status-dot { background: #ef4444; }
+.status-locked {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.status-active .status-dot {
+  background: #10b981;
+}
+.status-locked .status-dot {
+  background: #ef4444;
+}
 
 .action-btn {
   background: none;
@@ -203,10 +239,18 @@ onMounted(() => {
   border-radius: 6px;
   transition: all 0.2s;
 }
-.btn-lock { color: #f59e0b; }
-.btn-lock:hover { background: #fef3c7; }
-.btn-unlock { color: #10b981; }
-.btn-unlock:hover { background: #d1fae5; }
+.btn-lock {
+  color: #f59e0b;
+}
+.btn-lock:hover {
+  background: #fef3c7;
+}
+.btn-unlock {
+  color: #10b981;
+}
+.btn-unlock:hover {
+  background: #d1fae5;
+}
 
 .loading-state {
   padding: 40px;
@@ -217,11 +261,19 @@ onMounted(() => {
   color: #888;
 }
 .spinner {
-  width: 32px; height: 32px;
+  width: 32px;
+  height: 32px;
   border: 3px solid #f3f3f3;
-  border-top: 3px solid #2E7D32;
+  border-top: 3px solid #2e7d32;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
 </style>

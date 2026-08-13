@@ -22,7 +22,10 @@ export class ChungLoaiRepository {
     });
   }
 
-  async update(id: number, data: Prisma.ChungLoaiUpdateInput): Promise<ChungLoai> {
+  async update(
+    id: number,
+    data: Prisma.ChungLoaiUpdateInput,
+  ): Promise<ChungLoai> {
     return this.prisma.chungLoai.update({
       where: { chungloai_id: id },
       data,

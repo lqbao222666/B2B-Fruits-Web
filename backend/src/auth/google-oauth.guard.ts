@@ -8,7 +8,7 @@ export class GoogleOAuthGuard extends AuthGuard('google') {
     // Đọc role từ query parameters (ví dụ: ?role=doanh_nghiep)
     // Nếu không có, mặc định là nong_dan
     const role = req.query.role || 'nong_dan';
-    
+
     return {
       state: role,
     };

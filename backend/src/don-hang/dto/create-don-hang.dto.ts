@@ -54,6 +54,12 @@ export class CreateDonHangDto {
   tien_coc?: number;
 
   @IsOptional()
+  nong_dan_da_tt_vanchuyen?: boolean;
+
+  @IsOptional()
+  doanh_nghiep_da_tt_coc?: boolean;
+
+  @IsOptional()
   @IsString()
   ma_xac_nhan?: string;
 

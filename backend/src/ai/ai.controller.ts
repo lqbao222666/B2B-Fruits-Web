@@ -27,7 +27,7 @@ export class AiController {
   async chat(@Request() req: any, @Body() dto: ChatDto) {
     // Lấy role từ JWT nếu user không truyền lên
     if (!dto.role_nguoi_dung && req.user?.role) {
-      dto.role_nguoi_dung = req.user.role as any;
+      dto.role_nguoi_dung = req.user.role;
     }
     return this.aiService.chat(dto);
   }

@@ -123,8 +123,8 @@ export const Auth = {
     return response.data;
   },
 
-  async LoginGoogle(role: string = 'nong_dan') {
-    window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/auth/google?role=${role}`;
+  async LoginGoogle(role: string = "nong_dan") {
+    window.location.href = `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/auth/google?role=${role}`;
   },
 
   saveToken(token: string) {
@@ -147,7 +147,11 @@ export const Auth = {
     return response.data;
   },
 
-  async resetPasswordWithOtp(payload: { email: string; otp: string; newPassword: string }) {
+  async resetPasswordWithOtp(payload: {
+    email: string;
+    otp: string;
+    newPassword: string;
+  }) {
     const response = await api.post("auth/reset-password", payload);
     return response.data;
   },

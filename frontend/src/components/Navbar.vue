@@ -17,7 +17,7 @@ const showCategoryMenu = ref(false);
 const getAvatarUrl = (path: string | null) => {
   if (!path) return "";
   if (path.startsWith("http")) return path;
-  return `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${path}`;
+  return `${import.meta.env.VITE_API_URL || "http://localhost:3000"}${path}`;
 };
 
 const updateCartCount = async () => {
@@ -56,7 +56,7 @@ const updateUnreadMessageCount = async () => {
   }
 };
 
-import socketService from '@/service/socket';
+import socketService from "@/service/socket";
 
 const checkAuth = () => {
   const savedUser = localStorage.getItem("user");
@@ -65,19 +65,19 @@ const checkAuth = () => {
       user.value = JSON.parse(savedUser);
       updateCartCount();
       updateUnreadMessageCount();
-      
+
       // Connect socket and set up listeners
       socketService.connect();
-      socketService.on('new_message', () => {
+      socketService.on("new_message", () => {
         updateUnreadMessageCount();
-        if (router.currentRoute.value.path !== '/messages') {
-          notify.info('Bạn có tin nhắn mới');
+        if (router.currentRoute.value.path !== "/messages") {
+          notify.info("Bạn có tin nhắn mới");
         }
       });
-      socketService.on('new_notification', () => {
+      socketService.on("new_notification", () => {
         // Trigger a custom event to fetch notifications if NotificationComponent is used
-        window.dispatchEvent(new Event('new-notification-received'));
-        notify.info('Bạn có thông báo mới');
+        window.dispatchEvent(new Event("new-notification-received"));
+        notify.info("Bạn có thông báo mới");
       });
     } catch (e) {
       user.value = null;
@@ -169,14 +169,20 @@ const handleSearch = () => {
 
         <!-- Phải: auth links -->
         <div class="topbar-right">
-          <RouterLink
-            to="/auth/nong-dan"
-            class="topbar-seller-badge"
-          >
+          <RouterLink to="/auth/nong-dan" class="topbar-seller-badge">
             <span>👨‍🌾</span>
             <span>Kênh người bán</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </RouterLink>
         </div>
@@ -338,13 +344,15 @@ const handleSearch = () => {
                 stroke-width="2"
                 stroke-linecap="round"
               >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                <path
+                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                />
               </svg>
               <div
                 v-if="unreadMessageCount > 0"
                 class="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1 border-2 border-white shadow-sm"
               >
-                {{ unreadMessageCount > 99 ? '99+' : unreadMessageCount }}
+                {{ unreadMessageCount > 99 ? "99+" : unreadMessageCount }}
               </div>
             </div>
             <span class="action-btn-label">Tin nhắn</span>
@@ -352,6 +360,27 @@ const handleSearch = () => {
 
           <!-- Thông báo -->
           <ThongBaoDropdown v-if="user" :userId="user.user_id || user.id" />
+
+          <!-- Nhu cầu thu mua -->
+          <RouterLink to="/nhu-cau" class="action-btn">
+            <div class="action-btn-icon">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              >
+                <path
+                  d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+            </div>
+            <span class="action-btn-label">Nhu cầu B2B</span>
+          </RouterLink>
 
           <!-- Đơn hàng -->
           <RouterLink to="/orders" class="action-btn">
@@ -560,6 +589,34 @@ const handleSearch = () => {
                       <line x1="9" y1="21" x2="9" y2="9" />
                     </svg>
                     Quản lý bài đăng
+                  </RouterLink>
+                </template>
+
+                <template
+                  v-if="
+                    user.role?.toUpperCase() === 'DOANH_NGHIEP' ||
+                    user.role?.toUpperCase() === 'ADMIN'
+                  "
+                >
+                  <RouterLink
+                    to="/quan-ly-nhu-cau"
+                    @click="isMenuOpen = false"
+                    class="dropdown-item text-emerald-700 font-bold"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                      />
+                      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                    </svg>
+                    Quản lý nhu cầu thu mua
                   </RouterLink>
                 </template>
 

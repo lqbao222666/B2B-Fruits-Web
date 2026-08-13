@@ -35,8 +35,15 @@ export class NhuCauController {
   findAll(
     @Query('ten_nong_san') ten_nong_san?: string,
     @Query('tinh_thanh_giao') tinh_thanh_giao?: string,
+    @Query('danhmuc_id') danhmuc_id?: string,
+    @Query('trang_thai') trang_thai?: string,
   ) {
-    return this.service.findAll({ ten_nong_san, tinh_thanh_giao });
+    return this.service.findAll({
+      ten_nong_san,
+      tinh_thanh_giao,
+      danhmuc_id: danhmuc_id ? parseInt(danhmuc_id, 10) : undefined,
+      trang_thai,
+    });
   }
 
   /// Admin xem danh sách nhu cầu chưa được thông báo hàng mới
@@ -88,10 +95,10 @@ export class NhuCauController {
     return this.service.resetThongBao(id);
   }
 
-  /// Chỉ admin mới được xoá cứng
+  /// Xoá nhu cầu thu mua (Doanh nghiệp sở hữu hoặc Admin)
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin)
+  @Roles(Role.doanh_nghiep, Role.admin)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
   }

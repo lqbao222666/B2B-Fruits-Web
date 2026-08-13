@@ -1,128 +1,133 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import CommentService from '@/service/comment'
-import { notify } from '@/utils/notifier'
+import { ref, computed, onMounted, watch } from "vue";
+import CommentService from "@/service/comment";
+import { notify } from "@/utils/notifier";
 
-const comments = ref<any[]>([])
-const loading = ref(true)
+const comments = ref<any[]>([]);
+const loading = ref(true);
 
 // --- Filter state ---
 const filter = ref({
-  visibility: 'ALL',
+  visibility: "ALL",
   rating: 0, // 0 = tất cả sao
-  productId: '', // '' = tất cả sản phẩm
-})
+  productId: "", // '' = tất cả sản phẩm
+});
 
 // --- Pagination state ---
-const currentPage = ref(1)
-const pageSize = ref(8)
+const currentPage = ref(1);
+const pageSize = ref(8);
 
 // --- Danh sách sản phẩm duy nhất từ comments ---
 const productList = computed(() => {
-  const map = new Map<string, string>()
+  const map = new Map<string, string>();
   comments.value.forEach((c) => {
     if (c.product?.id && c.product?.name) {
-      map.set(c.product.id, c.product.name)
+      map.set(c.product.id, c.product.name);
     }
-  })
-  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
-})
+  });
+  return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+});
 
 // --- Lọc comments theo filter ---
 const filteredComments = computed(() => {
   return comments.value.filter((c) => {
     const matchVisibility =
-      filter.value.visibility === 'ALL' ||
-      (filter.value.visibility === 'VISIBLE' && !c.isHidden) ||
-      (filter.value.visibility === 'HIDDEN' && c.isHidden)
+      filter.value.visibility === "ALL" ||
+      (filter.value.visibility === "VISIBLE" && !c.isHidden) ||
+      (filter.value.visibility === "HIDDEN" && c.isHidden);
 
-    const matchRating = filter.value.rating === 0 || c.rating === filter.value.rating
+    const matchRating =
+      filter.value.rating === 0 || c.rating === filter.value.rating;
 
-    const matchProduct = !filter.value.productId || c.product?.id === filter.value.productId
+    const matchProduct =
+      !filter.value.productId || c.product?.id === filter.value.productId;
 
-    return matchVisibility && matchRating && matchProduct
-  })
-})
+    return matchVisibility && matchRating && matchProduct;
+  });
+});
 
 // --- Phân trang ---
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(filteredComments.value.length / pageSize.value)),
-)
+);
 
 const paginatedComments = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return filteredComments.value.slice(start, start + pageSize.value)
-})
+  const start = (currentPage.value - 1) * pageSize.value;
+  return filteredComments.value.slice(start, start + pageSize.value);
+});
 
 // Reset về trang 1 khi filter thay đổi
 watch(
   filter,
   () => {
-    currentPage.value = 1
+    currentPage.value = 1;
   },
   { deep: true },
-)
+);
 
 // --- Danh sách số trang hiển thị ---
 const pageNumbers = computed(() => {
-  const total = totalPages.value
-  const current = currentPage.value
-  const delta = 2
-  const range: (number | '...')[] = []
+  const total = totalPages.value;
+  const current = currentPage.value;
+  const delta = 2;
+  const range: (number | "...")[] = [];
 
-  const start = Math.max(2, current - delta)
-  const end = Math.min(total - 1, current + delta)
+  const start = Math.max(2, current - delta);
+  const end = Math.min(total - 1, current + delta);
 
-  range.push(1)
-  if (start > 2) range.push('...')
-  for (let i = start; i <= end; i++) range.push(i)
-  if (end < total - 1) range.push('...')
-  if (total > 1) range.push(total)
+  range.push(1);
+  if (start > 2) range.push("...");
+  for (let i = start; i <= end; i++) range.push(i);
+  if (end < total - 1) range.push("...");
+  if (total > 1) range.push(total);
 
-  return range
-})
+  return range;
+});
 
 // --- API ---
 const fetchAllComments = async () => {
-  loading.value = true
+  loading.value = true;
   try {
-    const res = await CommentService.getComments({ visibility: 'ALL' }, true)
-    comments.value = res.data || res
+    const res = await CommentService.getComments({ visibility: "ALL" }, true);
+    comments.value = res.data || res;
   } catch {
-    notify.error('Không thể tải danh sách bình luận')
+    notify.error("Không thể tải danh sách bình luận");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const toggleStatus = async (comment: any) => {
   try {
     if (comment.isHidden) {
-      await CommentService.showComment(comment.id)
-      notify.success('Đã hiển thị bình luận')
+      await CommentService.showComment(comment.id);
+      notify.success("Đã hiển thị bình luận");
     } else {
-      await CommentService.hideComment(comment.id)
-      notify.success('Đã ẩn bình luận')
+      await CommentService.hideComment(comment.id);
+      notify.success("Đã ẩn bình luận");
     }
-    await fetchAllComments()
+    await fetchAllComments();
   } catch {
-    notify.error('Thao tác thất bại')
+    notify.error("Thao tác thất bại");
   }
-}
+};
 
-const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('vi-VN')
+const formatDate = (dateString: string) =>
+  new Date(dateString).toLocaleDateString("vi-VN");
 
 const resetFilters = () => {
-  filter.value = { visibility: 'ALL', rating: 0, productId: '' }
-}
+  filter.value = { visibility: "ALL", rating: 0, productId: "" };
+};
 
-onMounted(fetchAllComments)
+onMounted(fetchAllComments);
 </script>
 
 <template>
   <div class="p-8">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div
+      class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"
+    >
       <div>
         <h2 class="text-2xl font-black text-slate-800">Quản lý bình luận</h2>
         <p class="text-slate-500 text-sm">
@@ -140,7 +145,8 @@ onMounted(fetchAllComments)
     >
       <!-- Lọc theo trạng thái -->
       <div class="flex flex-col gap-1">
-        <label class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
+        <label
+          class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
           >Trạng thái</label
         >
         <select
@@ -155,7 +161,8 @@ onMounted(fetchAllComments)
 
       <!-- Lọc theo sao -->
       <div class="flex flex-col gap-1">
-        <label class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
+        <label
+          class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
           >Số sao</label
         >
         <div
@@ -164,7 +171,9 @@ onMounted(fetchAllComments)
           <button
             @click="filter.rating = 0"
             :class="
-              filter.rating === 0 ? 'bg-[#658a22] text-white' : 'text-slate-500 hover:bg-slate-200'
+              filter.rating === 0
+                ? 'bg-[#658a22] text-white'
+                : 'text-slate-500 hover:bg-slate-200'
             "
             class="px-3 py-0.5 rounded-lg text-xs font-black transition-all"
           >
@@ -182,7 +191,9 @@ onMounted(fetchAllComments)
             class="flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-xs font-black transition-all"
           >
             {{ star
-            }}<span class="text-yellow-400" :class="filter.rating === star ? 'text-white' : ''"
+            }}<span
+              class="text-yellow-400"
+              :class="filter.rating === star ? 'text-white' : ''"
               >★</span
             >
           </button>
@@ -191,7 +202,8 @@ onMounted(fetchAllComments)
 
       <!-- Lọc theo sản phẩm -->
       <div class="flex flex-col gap-1 flex-1 min-w-[200px]">
-        <label class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
+        <label
+          class="text-[11px] font-black text-slate-400 uppercase tracking-widest"
           >Sản phẩm</label
         >
         <select
@@ -216,9 +228,13 @@ onMounted(fetchAllComments)
     </div>
 
     <!-- Table -->
-    <div class="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
+    <div
+      class="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden"
+    >
       <div v-if="loading" class="p-20 text-center text-slate-400 font-bold">
-        <span class="material-symbols-outlined animate-spin text-3xl mb-2">sync</span>
+        <span class="material-symbols-outlined animate-spin text-3xl mb-2"
+          >sync</span
+        >
         <p>Đang xử lý dữ liệu...</p>
       </div>
 
@@ -226,16 +242,24 @@ onMounted(fetchAllComments)
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-slate-50/50 border-b border-slate-100">
-              <th class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest">
+              <th
+                class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest"
+              >
                 Khách hàng
               </th>
-              <th class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest">
+              <th
+                class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest"
+              >
                 Sản phẩm
               </th>
-              <th class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest">
+              <th
+                class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest"
+              >
                 Nội dung & Đánh giá
               </th>
-              <th class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest">
+              <th
+                class="px-6 py-5 font-black text-slate-400 uppercase text-[11px] tracking-widest"
+              >
                 Ngày tạo
               </th>
               <th
@@ -261,27 +285,37 @@ onMounted(fetchAllComments)
                   <div
                     class="w-9 h-9 rounded-full bg-[#658a22]/10 flex items-center justify-center text-[#658a22] font-bold"
                   >
-                    {{ (c.account?.profile?.fullName || 'K')[0] }}
+                    {{ (c.account?.profile?.fullName || "K")[0] }}
                   </div>
                   <div>
                     <div class="font-bold text-slate-700 text-sm">
-                      {{ c.account?.profile?.fullName || 'Khách' }}
+                      {{ c.account?.profile?.fullName || "Khách" }}
                     </div>
-                    <div class="text-[11px] text-slate-400">{{ c.account?.email }}</div>
+                    <div class="text-[11px] text-slate-400">
+                      {{ c.account?.email }}
+                    </div>
                   </div>
                 </div>
               </td>
               <td class="px-6 py-4">
-                <div class="text-sm font-semibold text-[#658a22] truncate max-w-[150px]">
+                <div
+                  class="text-sm font-semibold text-[#658a22] truncate max-w-[150px]"
+                >
                   {{ c.product?.name }}
                 </div>
               </td>
               <td class="px-6 py-4">
                 <div class="flex text-yellow-400 text-xs mb-1">
-                  <span v-for="s in 5" :key="s">{{ s <= c.rating ? '★' : '☆' }}</span>
-                  <span class="ml-1 text-slate-400 font-bold">{{ c.rating }}/5</span>
+                  <span v-for="s in 5" :key="s">{{
+                    s <= c.rating ? "★" : "☆"
+                  }}</span>
+                  <span class="ml-1 text-slate-400 font-bold"
+                    >{{ c.rating }}/5</span
+                  >
                 </div>
-                <div class="text-sm text-slate-600 max-w-xs line-clamp-2 italic">
+                <div
+                  class="text-sm text-slate-600 max-w-xs line-clamp-2 italic"
+                >
                   "{{ c.content }}"
                 </div>
               </td>
@@ -297,7 +331,7 @@ onMounted(fetchAllComments)
                   "
                   class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter border"
                 >
-                  {{ c.isHidden ? 'Đã ẩn' : 'Hiển thị' }}
+                  {{ c.isHidden ? "Đã ẩn" : "Hiển thị" }}
                 </span>
               </td>
               <td class="px-6 py-4 text-right">
@@ -312,7 +346,7 @@ onMounted(fetchAllComments)
                   title="Thay đổi trạng thái"
                 >
                   <span class="material-symbols-outlined">{{
-                    c.isHidden ? 'visibility' : 'visibility_off'
+                    c.isHidden ? "visibility" : "visibility_off"
                   }}</span>
                 </button>
               </td>
@@ -322,12 +356,18 @@ onMounted(fetchAllComments)
       </div>
 
       <!-- Empty state -->
-      <div v-if="!loading && filteredComments.length === 0" class="p-20 text-center">
+      <div
+        v-if="!loading && filteredComments.length === 0"
+        class="p-20 text-center"
+      >
         <span class="material-symbols-outlined text-6xl text-slate-200 mb-4"
           >comments_disabled</span
         >
         <p class="text-slate-400 font-bold">Không tìm thấy bình luận nào.</p>
-        <button @click="resetFilters" class="mt-4 text-sm text-[#658a22] font-bold underline">
+        <button
+          @click="resetFilters"
+          class="mt-4 text-sm text-[#658a22] font-bold underline"
+        >
           Xóa bộ lọc
         </button>
       </div>
@@ -347,7 +387,10 @@ onMounted(fetchAllComments)
           }}
         </span>
         trong tổng số
-        <span class="font-bold text-slate-700">{{ filteredComments.length }}</span> bình luận
+        <span class="font-bold text-slate-700">{{
+          filteredComments.length
+        }}</span>
+        bình luận
       </p>
 
       <!-- Nút phân trang -->

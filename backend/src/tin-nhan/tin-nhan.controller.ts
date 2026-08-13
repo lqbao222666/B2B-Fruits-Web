@@ -46,7 +46,10 @@ export class TinNhanController {
       }),
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|mp4|webm|ogg)$/)) {
-          return cb(new BadRequestException('Chỉ chấp nhận file ảnh hoặc video'), false);
+          return cb(
+            new BadRequestException('Chỉ chấp nhận file ảnh hoặc video'),
+            false,
+          );
         }
         cb(null, true);
       },
@@ -55,7 +58,10 @@ export class TinNhanController {
   )
   uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('Vui lòng chọn file');
-    return { url: `/uploads/${file.filename}`, type: file.mimetype.includes('video') ? 'video' : 'image' };
+    return {
+      url: `/uploads/${file.filename}`,
+      type: file.mimetype.includes('video') ? 'video' : 'image',
+    };
   }
 
   @Post()
@@ -72,7 +78,9 @@ export class TinNhanController {
 
   @Get('unread/count')
   countUnread(@GetUser() currentUser: any) {
-    const userId = Number(currentUser.id || currentUser.user_id || currentUser.sub);
+    const userId = Number(
+      currentUser.id || currentUser.user_id || currentUser.sub,
+    );
     return this.tinNhanService.countUnread(userId);
   }
 

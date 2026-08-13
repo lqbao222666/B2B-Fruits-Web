@@ -8,8 +8,20 @@ export class NhuCauRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CreateNhuCauDto) {
+    const payload: any = { ...data };
+    if (payload.ngay_bat_dau) {
+      payload.ngay_bat_dau = new Date(payload.ngay_bat_dau);
+    } else {
+      delete payload.ngay_bat_dau;
+    }
+    if (payload.ngay_ket_thuc) {
+      payload.ngay_ket_thuc = new Date(payload.ngay_ket_thuc);
+    } else {
+      delete payload.ngay_ket_thuc;
+    }
+
     return this.prisma.nhuCauThuMua.create({
-      data,
+      data: payload,
       include: {
         doanhNghiep: {
           include: { user: { select: { email: true, full_name: true } } },
@@ -19,17 +31,34 @@ export class NhuCauRepository {
     });
   }
 
-  async findAll(filters?: { ten_nong_san?: string; tinh_thanh_giao?: string }) {
+  async findAll(filters?: {
+    ten_nong_san?: string;
+    tinh_thanh_giao?: string;
+    danhmuc_id?: number;
+    trang_thai?: string;
+  }) {
+    const where: any = {};
+    if (filters?.trang_thai && filters.trang_thai !== 'all') {
+      where.trang_thai = filters.trang_thai;
+    } else if (!filters?.trang_thai) {
+      where.trang_thai = 'dang_thu_mua';
+    }
+
+    if (filters?.ten_nong_san) {
+      where.ten_nong_san = {
+        contains: filters.ten_nong_san,
+        mode: 'insensitive',
+      };
+    }
+    if (filters?.tinh_thanh_giao) {
+      where.tinh_thanh_giao = filters.tinh_thanh_giao;
+    }
+    if (filters?.danhmuc_id) {
+      where.danhmuc_id = filters.danhmuc_id;
+    }
+
     return this.prisma.nhuCauThuMua.findMany({
-      where: {
-        trang_thai: 'dang_thu_mua',
-        ...(filters?.ten_nong_san && {
-          ten_nong_san: { contains: filters.ten_nong_san, mode: 'insensitive' },
-        }),
-        ...(filters?.tinh_thanh_giao && {
-          tinh_thanh_giao: filters.tinh_thanh_giao,
-        }),
-      },
+      where,
       include: {
         doanhNghiep: {
           include: {
@@ -37,6 +66,7 @@ export class NhuCauRepository {
           },
         },
         danhMuc: true,
+        _count: { select: { baoGiaList: true } },
       },
       orderBy: { created_at: 'desc' },
     });
@@ -45,7 +75,10 @@ export class NhuCauRepository {
   async findByDoanhNghiep(doanh_nghiep_id: number) {
     return this.prisma.nhuCauThuMua.findMany({
       where: { doanh_nghiep_id },
-      include: { danhMuc: true },
+      include: {
+        danhMuc: true,
+        _count: { select: { baoGiaList: true } },
+      },
       orderBy: { created_at: 'desc' },
     });
   }
@@ -60,6 +93,18 @@ export class NhuCauRepository {
           },
         },
         danhMuc: true,
+        baoGiaList: {
+          include: {
+            nongDan: {
+              include: {
+                user: {
+                  select: { full_name: true, phone: true, avatar_url: true },
+                },
+              },
+            },
+          },
+          orderBy: { updated_at: 'desc' },
+        },
       },
     });
     if (!item) throw new NotFoundException('Nhu cầu thu mua không tồn tại');
@@ -67,9 +112,17 @@ export class NhuCauRepository {
   }
 
   async update(nhucau_id: number, data: UpdateNhuCauDto) {
+    const payload: any = { ...data };
+    if (payload.ngay_bat_dau) {
+      payload.ngay_bat_dau = new Date(payload.ngay_bat_dau);
+    }
+    if (payload.ngay_ket_thuc) {
+      payload.ngay_ket_thuc = new Date(payload.ngay_ket_thuc);
+    }
+
     return this.prisma.nhuCauThuMua.update({
       where: { nhucau_id },
-      data,
+      data: payload,
     });
   }
 
@@ -90,7 +143,14 @@ export class NhuCauRepository {
       include: {
         doanhNghiep: {
           include: {
-            user: { select: { user_id: true, email: true, full_name: true, phone: true } },
+            user: {
+              select: {
+                user_id: true,
+                email: true,
+                full_name: true,
+                phone: true,
+              },
+            },
           },
         },
         danhMuc: true,

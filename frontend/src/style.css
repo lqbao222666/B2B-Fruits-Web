@@ -15,16 +15,6 @@ html {
   font-family: var(--font-display);
 }
 
-::selection {
-  background-color: #34d399;
-  color: #ffffff;
-}
-
-::-moz-selection {
-  background-color: #34d399;
-  color: #ffffff;
-}
-
 body {
   background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 50%, #f0fdfa 100%);
   background-attachment: fixed;
@@ -96,7 +86,8 @@ body {
 
 /* Animations */
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0px);
   }
   50% {
@@ -105,7 +96,8 @@ body {
 }
 
 @keyframes softPulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -116,7 +108,8 @@ body {
 }
 
 @keyframes glowPulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
   }
   50% {
@@ -154,7 +147,9 @@ body {
 /* Page Transition effects */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 }
 
 .fade-slide-enter-from {

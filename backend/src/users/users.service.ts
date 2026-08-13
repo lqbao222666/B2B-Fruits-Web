@@ -40,17 +40,17 @@ export class UsersService {
       password_hash: hashPassword,
     });
   }
-  
+
   // === THÊM HÀM NÀY ĐỂ FIX LỖI ===
   async createGoogleUser(googleUser: any) {
     const hashedPassword = await bcrypt.hash(Math.random().toString(36), 10);
-    
+
     let roleName = googleUser.requested_role || 'nong_dan';
     if (!['nong_dan', 'doanh_nghiep'].includes(roleName)) {
       roleName = 'nong_dan';
     }
 
-    const dummyPhone = `gg_${Date.now()}_${Math.floor(Math.random()*100)}`;
+    const dummyPhone = `08${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10)}`;
     const user = await this.usersRepository['prismaService'].users.create({
       data: {
         email: googleUser.email,
@@ -71,7 +71,8 @@ export class UsersService {
           ten_cong_ty: user.full_name || 'Công ty (Chưa cập nhật)',
           tinh_thanh: 'Chưa cập nhật',
           so_dien_thoai: dummyPhone,
-        }
+          trang_thai: 'active',
+        },
       });
     } else if (roleName === 'nong_dan') {
       await this.usersRepository['prismaService'].nongDan.create({
@@ -80,7 +81,8 @@ export class UsersService {
           ho_ten: user.full_name || 'Google User',
           tinh_thanh: 'Chưa cập nhật',
           so_dien_thoai: dummyPhone,
-        }
+          trang_thai: 'active',
+        },
       });
     }
 
@@ -174,7 +176,7 @@ export class UsersService {
     return this.usersRepository['prismaService'].users.update({
       where: { user_id: id },
       data: { avatar_url: dto.avatar_url },
-      select: { user_id: true, email: true, avatar_url: true, full_name: true }
+      select: { user_id: true, email: true, avatar_url: true, full_name: true },
     });
   }
 
@@ -182,32 +184,42 @@ export class UsersService {
     if (currentUser.role !== 'admin' && currentUser.id !== id) {
       throw new UnauthorizedException('Không có quyền thay đổi thông tin');
     }
-    
+
     // update basic info
     const dataToUpdate: any = {};
     if (dto.full_name !== undefined) dataToUpdate.full_name = dto.full_name;
-    if (dto.phone !== undefined && dto.phone !== null) dataToUpdate.phone = dto.phone;
-    if (dto.ngay_sinh !== undefined) dataToUpdate.ngay_sinh = dto.ngay_sinh ? new Date(dto.ngay_sinh) : null;
+    if (dto.phone !== undefined && dto.phone !== null)
+      dataToUpdate.phone = dto.phone;
+    if (dto.ngay_sinh !== undefined)
+      dataToUpdate.ngay_sinh = dto.ngay_sinh ? new Date(dto.ngay_sinh) : null;
     if (dto.gioi_tinh !== undefined) dataToUpdate.gioi_tinh = dto.gioi_tinh;
 
     return this.usersRepository['prismaService'].users.update({
       where: { user_id: id },
       data: dataToUpdate,
-      select: { user_id: true, full_name: true, phone: true, ngay_sinh: true, gioi_tinh: true }
+      select: {
+        user_id: true,
+        full_name: true,
+        phone: true,
+        ngay_sinh: true,
+        gioi_tinh: true,
+      },
     });
   }
 
   async getFeaturedSuppliers() {
-    const suppliers = await this.usersRepository['prismaService'].users.findMany({
+    const suppliers = await this.usersRepository[
+      'prismaService'
+    ].users.findMany({
       where: {
         vaiTro: {
-          ten_vai_tro: { in: ['nong_dan', 'doanh_nghiep'] }
+          ten_vai_tro: { in: ['nong_dan', 'doanh_nghiep'] },
         },
         nongDan: {
           baiDangs: {
-            some: { trang_thai: 'dang_ban' }
-          }
-        }
+            some: { trang_thai: 'dang_ban' },
+          },
+        },
       },
       take: 12,
       select: {
@@ -226,20 +238,20 @@ export class UsersService {
                 tieu_de: true,
                 images: true,
                 tieuChuans: {
-                  select: { ten_tieu_chuan: true, icon_url: true }
-                }
-              }
-            }
-          }
-        }
-      }
+                  select: { ten_tieu_chuan: true, icon_url: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
-    return suppliers.map(user => {
+    return suppliers.map((user) => {
       const baiDangs = user.nongDan?.baiDangs || [];
       const certificatesMap = new Map();
-      baiDangs.forEach(post => {
-        post.tieuChuans.forEach(tc => {
+      baiDangs.forEach((post) => {
+        post.tieuChuans.forEach((tc) => {
           certificatesMap.set(tc.ten_tieu_chuan, tc);
         });
       });
@@ -248,7 +260,7 @@ export class UsersService {
         id: user.user_id,
         name: user.full_name,
         avatar: user.avatar_url,
-        recentProducts: baiDangs.map(p => {
+        recentProducts: baiDangs.map((p) => {
           let firstImg: any = p.images;
           if (typeof firstImg === 'string') {
             try {
@@ -264,10 +276,10 @@ export class UsersService {
             id: p.baidang_id,
             name: p.ten_nong_san || p.tieu_de,
             image: typeof firstImg === 'string' ? firstImg : p.images,
-            images: p.images
+            images: p.images,
           };
         }),
-        certificates: Array.from(certificatesMap.values())
+        certificates: Array.from(certificatesMap.values()),
       };
     });
   }

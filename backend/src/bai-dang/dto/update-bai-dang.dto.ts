@@ -1,6 +1,13 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateBaiDangDto } from './create-bai-dang.dto';
-import { IsOptional, IsString, IsNumber, Min, IsArray, ValidateNested } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNumber,
+  Min,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
 import { TrangThaiBaiDang } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { PhanLoaiDto } from './phan-loai.dto';

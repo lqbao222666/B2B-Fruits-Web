@@ -1,4 +1,4 @@
-import api from './api';
+import api from "./api";
 
 export interface ChungLoai {
   chungloai_id: number;
@@ -12,7 +12,7 @@ export interface ChungLoai {
 
 export const ChungLoaiService = {
   async getAll() {
-    const res = await api.get('/chung-loai');
+    const res = await api.get("/chung-loai");
     return res.data;
   },
 
@@ -22,7 +22,7 @@ export const ChungLoaiService = {
   },
 
   async create(data: Partial<ChungLoai>) {
-    const res = await api.post('/chung-loai', data);
+    const res = await api.post("/chung-loai", data);
     return res.data;
   },
 

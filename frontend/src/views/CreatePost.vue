@@ -265,8 +265,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (map) {
-    map.remove()
-    map = null
+    map.remove();
+    map = null;
   }
 });
 

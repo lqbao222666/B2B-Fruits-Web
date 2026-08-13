@@ -165,7 +165,7 @@ export class UsersController {
     const avatar_url = `/avatars/${file.filename}`;
     const dto = new UpdateAvatarDto();
     dto.avatar_url = avatar_url;
-    
+
     return this.usersService.updateAvatar(id, dto, currentUser);
   }
 }

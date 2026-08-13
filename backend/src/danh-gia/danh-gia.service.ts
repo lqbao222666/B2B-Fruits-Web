@@ -11,7 +11,11 @@ export class DanhGiaService {
     return this.repository.create(nguoi_danhgia_id, data);
   }
 
-  async reply(danhgia_id: number, nguoi_tra_loi_id: number, data: ReplyDanhGiaDto) {
+  async reply(
+    danhgia_id: number,
+    nguoi_tra_loi_id: number,
+    data: ReplyDanhGiaDto,
+  ) {
     return this.repository.reply(danhgia_id, nguoi_tra_loi_id, data);
   }
 

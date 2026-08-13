@@ -69,7 +69,7 @@ export class TheoDoiService {
 
   async getPurchasedSellers(buyerId: number) {
     const numericBuyerId = Number(buyerId);
-    
+
     // Get unique sellers the buyer has bought from
     const orders = await this.prisma.donHang.findMany({
       where: { nguoi_mua_id: numericBuyerId },
@@ -82,11 +82,11 @@ export class TheoDoiService {
     });
 
     const subMap = new Map();
-    subscriptions.forEach(sub => {
+    subscriptions.forEach((sub) => {
       subMap.set(sub.seller_id, sub.is_active);
     });
 
-    return orders.map(order => {
+    return orders.map((order) => {
       const sellerId = order.nguoi_ban_id;
       return {
         seller_id: sellerId,

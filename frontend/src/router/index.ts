@@ -85,6 +85,7 @@ const router = createRouter({
     },
     {
       path: "/detail-orders/:id",
+      alias: ["/orders/:id", "/order/:id"],
       name: "detailorders",
       component: () => import("../views/OrderDetail.vue"),
     },
@@ -114,6 +115,47 @@ const router = createRouter({
       component: () => import("@/views/CreatePost.vue"),
       meta: { requiresAuth: true },
     },
+    // === NHU CẦU THU MUA B2B ===
+    {
+      path: "/nhu-cau",
+      name: "NhuCauThuMua",
+      component: () => import("@/views/NhuCauThuMua.vue"),
+    },
+    {
+      path: "/nhu-cau/:id",
+      name: "NhuCauDetail",
+      component: () => import("@/views/NhuCauDetail.vue"),
+    },
+    {
+      path: "/quan-ly-nhu-cau",
+      name: "ManageNhuCau",
+      component: () => import("@/views/ManageNhuCau.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/create-nhu-cau",
+      name: "CreateNhuCau",
+      component: () => import("@/views/CreateNhuCau.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/edit-nhu-cau/:id",
+      name: "EditNhuCau",
+      component: () => import("@/views/EditNhuCau.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/phan-hoi-bao-gia/:id",
+      name: "PhanHoiBaoGia",
+      component: () => import("@/views/PhanHoiBaoGia.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/gui-bao-gia/:id",
+      name: "GuiBaoGia",
+      component: () => import("@/views/GuiBaoGia.vue"),
+      meta: { requiresAuth: true },
+    },
     // === ADMIN ROUTE (có bảo vệ) ===
     {
       path: "/admin",
@@ -131,6 +173,12 @@ const router = createRouter({
           name: "admin-products",
           component: () => import("../views/admin/ProductManagement.vue"),
           meta: { requiresAuth: true, requiresAdmin: true }, // bảo vệ thêm
+        },
+        {
+          path: "nhu-cau",
+          name: "admin-nhucau",
+          component: () => import("../views/admin/NhuCauManagement.vue"),
+          meta: { requiresAuth: true, requiresAdmin: true },
         },
         {
           path: "orders",

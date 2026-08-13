@@ -14,14 +14,20 @@ export class UsersRepository {
   async create(
     registerDto: RegisterDto & { password_hash: string },
   ): Promise<UserResponseDto> {
+    const userPhone =
+      registerDto.phone && registerDto.phone.trim() !== ''
+        ? registerDto.phone
+        : `09${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10)}`;
+
     const user = await this.prismaService.users.create({
       data: {
         email: registerDto.email,
-        phone: registerDto.phone || `tmp_${Date.now()}_${Math.floor(Math.random()*1000)}`,
+        phone: userPhone,
         password_hash: registerDto.password_hash,
         full_name: registerDto.full_name,
         vaiTro: { connect: { ten_vai_tro: registerDto.role } },
         is_active: true,
+        is_verified: true,
       },
       include: { vaiTro: true },
     });
@@ -29,23 +35,29 @@ export class UsersRepository {
     (result as any).role = vaiTro.ten_vai_tro;
 
     if (registerDto.role === 'nong_dan') {
-      await this.prismaService.nongDan.create({
-        data: {
-          user_id: user.user_id,
-          ho_ten: user.full_name || 'Nông dân',
-          tinh_thanh: 'Chưa cập nhật',
-          so_dien_thoai: user.phone,
-        },
-      }).catch(() => null);
+      await this.prismaService.nongDan
+        .create({
+          data: {
+            user_id: user.user_id,
+            ho_ten: user.full_name || 'Nông dân',
+            tinh_thanh: 'Chưa cập nhật',
+            so_dien_thoai: user.phone,
+            trang_thai: 'active',
+          },
+        })
+        .catch(() => null);
     } else if (registerDto.role === 'doanh_nghiep') {
-      await this.prismaService.doanhNghiep.create({
-        data: {
-          user_id: user.user_id,
-          ten_cong_ty: user.full_name || 'Công ty',
-          tinh_thanh: 'Chưa cập nhật',
-          so_dien_thoai: user.phone,
-        },
-      }).catch(() => null);
+      await this.prismaService.doanhNghiep
+        .create({
+          data: {
+            user_id: user.user_id,
+            ten_cong_ty: user.full_name || 'Công ty',
+            tinh_thanh: 'Chưa cập nhật',
+            so_dien_thoai: user.phone,
+            trang_thai: 'active',
+          },
+        })
+        .catch(() => null);
     }
 
     return plainToInstance(UserResponseDto, result);
@@ -116,7 +128,10 @@ export class UsersRepository {
 
   async deleteMany(ids: number[]) {
     return this.prismaService.users.deleteMany({
-      where: { user_id: { in: ids }, vaiTro: { ten_vai_tro: { not: 'admin' } } },
+      where: {
+        user_id: { in: ids },
+        vaiTro: { ten_vai_tro: { not: 'admin' } },
+      },
     });
   }
 }

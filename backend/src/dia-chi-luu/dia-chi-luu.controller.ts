@@ -20,4 +20,3 @@ export class DiaChiLuuController {
     return this.diaChiLuuService.remove(+id);
   }
 }
-

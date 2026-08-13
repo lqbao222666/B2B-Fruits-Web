@@ -27,17 +27,19 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
-      const token = client.handshake.auth.token || client.handshake.headers['authorization']?.split(' ')[1];
+      const token =
+        client.handshake.auth.token ||
+        client.handshake.headers['authorization']?.split(' ')[1];
       if (!token) {
         client.disconnect();
         return;
       }
-      
+
       const payload = this.jwtService.verify(token);
       const userId = payload.sub;
 
       client.data.user = payload;
-      
+
       if (!this.connectedUsers.has(userId)) {
         this.connectedUsers.set(userId, new Set());
       }
@@ -45,7 +47,9 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       this.logger.log(`Client connected: ${client.id} (User: ${userId})`);
     } catch (error: any) {
-      this.logger.error(`Connection error for client ${client.id}: ${error.message}`);
+      this.logger.error(
+        `Connection error for client ${client.id}: ${error.message}`,
+      );
       client.disconnect();
     }
   }
@@ -68,7 +72,7 @@ export class AppGateway implements OnGatewayConnection, OnGatewayDisconnect {
   sendToUser(userId: number, event: string, payload: any) {
     const userSockets = this.connectedUsers.get(userId);
     if (userSockets) {
-      userSockets.forEach(socketId => {
+      userSockets.forEach((socketId) => {
         this.server.to(socketId).emit(event, payload);
       });
     }

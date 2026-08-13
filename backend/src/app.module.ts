@@ -18,6 +18,7 @@ import { DanhGiaModule } from './danh-gia/danh-gia.module';
 import { TinNhanModule } from './tin-nhan/tin-nhan.module';
 import { BaoCaoModule } from './bao-cao/bao-cao.module';
 import { NhuCauModule } from './nhu-cau/nhu-cau.module';
+import { BaoGiaModule } from './bao-gia/bao-gia.module';
 import { AiModule } from './ai/ai.module';
 import { DiaChiLuuModule } from './dia-chi-luu/dia-chi-luu.module';
 import { GioHangModule } from './gio-hang/gio-hang.module';
@@ -50,6 +51,7 @@ import { GatewayModule } from './gateway/gateway.module';
     TinNhanModule,
     BaoCaoModule,
     NhuCauModule,
+    BaoGiaModule,
     AiModule,
     DiaChiLuuModule,
     GioHangModule,

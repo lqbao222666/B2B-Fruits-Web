@@ -1,18 +1,18 @@
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from "socket.io-client";
 
 class SocketService {
   public socket: Socket | null = null;
 
   connect() {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem("user");
     if (!userStr) return;
-    
-    let token = '';
+
+    let token = "";
     try {
       const user = JSON.parse(userStr);
       // Retrieve the token from wherever it is stored
-      token = localStorage.getItem('token') || user.token || '';
-    } catch(e) {}
+      token = localStorage.getItem("token") || user.token || "";
+    } catch (e) {}
 
     if (!token) return;
 
@@ -20,18 +20,18 @@ class SocketService {
       this.socket.disconnect();
     }
 
-    this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000', {
+    this.socket = io(import.meta.env.VITE_API_URL || "http://localhost:3000", {
       auth: {
-        token: token
-      }
+        token: token,
+      },
     });
 
-    this.socket.on('connect', () => {
-      console.log('Connected to socket server:', this.socket?.id);
+    this.socket.on("connect", () => {
+      console.log("Connected to socket server:", this.socket?.id);
     });
 
-    this.socket.on('disconnect', () => {
-      console.log('Disconnected from socket server');
+    this.socket.on("disconnect", () => {
+      console.log("Disconnected from socket server");
     });
   }
 

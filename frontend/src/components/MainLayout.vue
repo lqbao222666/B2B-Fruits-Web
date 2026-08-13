@@ -12,5 +12,5 @@
 </template>
 
 <script setup lang="ts">
-import bgImage from '@/assets/images/main-bg.jpg'
+import bgImage from "@/assets/images/main-bg.jpg";
 </script>

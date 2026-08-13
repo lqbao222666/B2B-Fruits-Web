@@ -136,9 +136,10 @@ Hỗ trợ admin tổng quan hệ thống và điều phối giao dịch.`,
   ) {
     const systemContent = `${systemPrompt}\n\n${contextData}`;
 
-    const messages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-      { role: 'system', content: systemContent },
-    ];
+    const messages: {
+      role: 'system' | 'user' | 'assistant';
+      content: string;
+    }[] = [{ role: 'system', content: systemContent }];
 
     // Thêm lịch sử hội thoại (tối đa 10 tin nhắn gần nhất)
     if (lichSu && lichSu.length > 0) {

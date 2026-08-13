@@ -1,28 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
-import Navbar from './components/Navbar.vue'
-import Footer from './components/Footer.vue'
-import Chatbot from './components/Chatbot.vue'
+import { computed } from "vue";
+import { RouterView, useRoute } from "vue-router";
+import Navbar from "./components/Navbar.vue";
+import Footer from "./components/Footer.vue";
+import Chatbot from "./components/Chatbot.vue";
 
-const route = useRoute()
+const route = useRoute();
 
 // Ẩn Navbar & Footer nếu là trang login/register hoặc trang admin
 const isAuthPage = computed(() => {
   return (
-    ['login', 'register', 'auth-nong-dan', 'auth-doanh-nghiep'].includes(route.name as string) ||
-    route.path.startsWith('/admin')
-  )
-})
+    ["login", "register", "auth-nong-dan", "auth-doanh-nghiep"].includes(
+      route.name as string,
+    ) || route.path.startsWith("/admin")
+  );
+});
 </script>
 
 <template>
-  <div class="relative flex min-h-screen flex-col bg-slate-50/60 text-slate-800 antialiased">
+  <div
+    class="relative flex min-h-screen flex-col bg-slate-50/60 text-slate-800 antialiased"
+  >
     <!-- Soft Decorative Ambient Background Gradients -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      <div class="absolute -top-40 -left-40 w-96 h-96 bg-emerald-200/30 rounded-full blur-3xl animate-float"></div>
-      <div class="absolute top-1/3 -right-20 w-96 h-96 bg-teal-200/20 rounded-full blur-3xl animate-float" style="animation-delay: -2s;"></div>
-      <div class="absolute bottom-10 left-1/4 w-96 h-96 bg-green-200/25 rounded-full blur-3xl animate-float" style="animation-delay: -4s;"></div>
+      <div
+        class="absolute -top-40 -left-40 w-96 h-96 bg-emerald-200/30 rounded-full blur-3xl animate-float"
+      ></div>
+      <div
+        class="absolute top-1/3 -right-20 w-96 h-96 bg-teal-200/20 rounded-full blur-3xl animate-float"
+        style="animation-delay: -2s"
+      ></div>
+      <div
+        class="absolute bottom-10 left-1/4 w-96 h-96 bg-green-200/25 rounded-full blur-3xl animate-float"
+        style="animation-delay: -4s"
+      ></div>
     </div>
 
     <Navbar v-if="!isAuthPage" class="relative z-30" />

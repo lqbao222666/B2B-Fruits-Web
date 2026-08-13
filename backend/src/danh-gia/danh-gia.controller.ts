@@ -1,4 +1,13 @@
-import { Controller, Post, Body, Get, Param, Request, UseGuards, Put } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Param,
+  Request,
+  UseGuards,
+  Put,
+} from '@nestjs/common';
 import { DanhGiaService } from './danh-gia.service';
 import { CreateDanhGiaDto } from './dto/create-danh-gia.dto';
 import { ReplyDanhGiaDto } from './dto/reply-danh-gia.dto';
@@ -17,7 +26,11 @@ export class DanhGiaController {
 
   @UseGuards(JwtAuthGuard)
   @Put(':id/reply')
-  async reply(@Request() req, @Param('id') id: string, @Body() data: ReplyDanhGiaDto) {
+  async reply(
+    @Request() req,
+    @Param('id') id: string,
+    @Body() data: ReplyDanhGiaDto,
+  ) {
     const userId = Number(req.user?.id || req.user?.user_id || req.user?.sub);
     return this.danhGiaService.reply(+id, userId, data);
   }

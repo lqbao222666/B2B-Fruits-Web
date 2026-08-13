@@ -1,10 +1,10 @@
-import api from './api.ts'; // Đảm bảo đường dẫn này trỏ đúng tới file api.ts của bạn
+import api from "./api.ts"; // Đảm bảo đường dẫn này trỏ đúng tới file api.ts của bạn
 
 export const OrderDetailService = {
   // 1. Tạo mới một chi tiết đơn hàng (POST /order-detail)
   async createOrderDetail(data: any) {
     // data tương ứng với OrderDetailRequestDto (variantId, quantity, bundleId...)
-    const response = await api.post('order-detail', data);
+    const response = await api.post("order-detail", data);
     return response.data;
   },
 
@@ -35,11 +35,11 @@ export const OrderDetailService = {
   // 6. Xóa nhiều chi tiết đơn hàng cùng lúc (DELETE /order-detail)
   async deleteListOrderDetails(ids: number[]) {
     // Lưu ý cực kỳ quan trọng: Với Axios, method DELETE muốn gửi body thì phải bọc trong object `data`
-    const response = await api.delete('order-detail', {
-      data: { Ids: ids } // Chữ 'Ids' này phải viết y hệt như khai báo trong DeleteListOrderDetailDto của backend nhé
+    const response = await api.delete("order-detail", {
+      data: { Ids: ids }, // Chữ 'Ids' này phải viết y hệt như khai báo trong DeleteListOrderDetailDto của backend nhé
     });
     return response.data;
-  }
+  },
 };
 
 export default OrderDetailService;

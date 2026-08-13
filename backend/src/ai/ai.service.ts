@@ -1,4 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Groq from 'groq-sdk';
 import { AiContextService } from './ai-context.service';
@@ -50,8 +54,11 @@ export class AiService {
     const { message, role_nguoi_dung, lich_su } = dto;
 
     // 1. Phân tích câu hỏi để trích xuất từ khoá & địa điểm
-    const { tuKhoa, tinhThanh, tieuChuan, mucGia, danhGia } = await this.contextService.extractKeywords(message);
-    this.logger.debug(`Phân tích: tuKhoa="${tuKhoa}", tinhThanh="${tinhThanh}", tieuChuan="${tieuChuan}", mucGia="${mucGia}", danhGia="${danhGia}"`);
+    const { tuKhoa, tinhThanh, tieuChuan, mucGia, danhGia } =
+      await this.contextService.extractKeywords(message);
+    this.logger.debug(
+      `Phân tích: tuKhoa="${tuKhoa}", tinhThanh="${tinhThanh}", tieuChuan="${tieuChuan}", mucGia="${mucGia}", danhGia="${danhGia}"`,
+    );
 
     // 2. Lấy dữ liệu thực từ DB dựa vào intent
     let baiDangs: any[] = [];
@@ -91,13 +98,14 @@ export class AiService {
 
     // 3. Xây dựng prompt
     const systemPrompt = this.promptService.buildSystemPrompt(role_nguoi_dung);
-    const baiDangCtx = baiDangs.length > 0
-      ? this.promptService.formatBaiDangContext(baiDangs)
-      : '';
-    const nhuCauCtx = nhuCaus.length > 0
-      ? this.promptService.formatNhuCauContext(nhuCaus)
-      : '';
-    const contextData = [baiDangCtx, nhuCauCtx].filter(Boolean).join('\n\n') ||
+    const baiDangCtx =
+      baiDangs.length > 0
+        ? this.promptService.formatBaiDangContext(baiDangs)
+        : '';
+    const nhuCauCtx =
+      nhuCaus.length > 0 ? this.promptService.formatNhuCauContext(nhuCaus) : '';
+    const contextData =
+      [baiDangCtx, nhuCauCtx].filter(Boolean).join('\n\n') ||
       '[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu phù hợp trong hệ thống hiện tại.';
 
     const messages = this.promptService.buildMessages(
@@ -116,7 +124,9 @@ export class AiService {
         temperature: 0.6,
         max_tokens: 1024,
       });
-      reply = completion.choices[0]?.message?.content ?? 'Xin lỗi, tôi không thể xử lý yêu cầu này.';
+      reply =
+        completion.choices[0]?.message?.content ??
+        'Xin lỗi, tôi không thể xử lý yêu cầu này.';
     } catch (error: any) {
       this.logger.error('Lỗi khi gọi Groq API:', error?.message);
       throw new InternalServerErrorException(
@@ -177,26 +187,32 @@ export class AiService {
     }
 
     let detected_category: { id: number; name: string } | undefined = undefined;
-    if (suggestions.length > 0 && suggestions[0].danhmuc_id && suggestions[0].ten_danh_muc) {
+    if (
+      suggestions.length > 0 &&
+      suggestions[0].danhmuc_id &&
+      suggestions[0].ten_danh_muc
+    ) {
       detected_category = {
         id: suggestions[0].danhmuc_id,
-        name: suggestions[0].ten_danh_muc
+        name: suggestions[0].ten_danh_muc,
       };
     }
 
-    return { 
-      reply, 
-      suggestions, 
-      action_hint, 
-      detected_category, 
+    return {
+      reply,
+      suggestions,
+      action_hint,
+      detected_category,
       detected_province: tinhThanh,
       detected_standard: tieuChuan,
       detected_price_range: mucGia,
-      detected_rating: danhGia
+      detected_rating: danhGia,
     };
   }
 
-  async suggestPostDescription(dto: SuggestPostDto): Promise<{ tieu_de?: string; gia_per_kg?: number; mo_ta?: string }> {
+  async suggestPostDescription(
+    dto: SuggestPostDto,
+  ): Promise<{ tieu_de?: string; gia_per_kg?: number; mo_ta?: string }> {
     const { tieu_de, ten_nong_san, so_luong_co, don_vi_tinh, tinh_thanh } = dto;
 
     const systemPrompt = `Bạn là một chuyên gia marketing nông sản. Nhiệm vụ của bạn là tối ưu hóa và gợi ý các thông tin hấp dẫn nhất cho một bài đăng bán nông sản trên sàn thương mại điện tử B2B.
@@ -226,11 +242,12 @@ Lưu ý:
         ],
         temperature: 0.7,
         max_tokens: 800,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       });
 
-      const replyContent = completion.choices[0]?.message?.content?.trim() ?? '{}';
-      
+      const replyContent =
+        completion.choices[0]?.message?.content?.trim() ?? '{}';
+
       let parsed: any = {};
       try {
         parsed = JSON.parse(replyContent);
@@ -243,13 +260,16 @@ Lưu ý:
           throw e;
         }
       }
-      
+
       return {
         tieu_de: parsed.tieu_de,
-        mo_ta: parsed.mo_ta
+        mo_ta: parsed.mo_ta,
       };
     } catch (error: any) {
-      this.logger.error('Lỗi khi gọi Groq API để gợi ý bài đăng:', error?.message);
+      this.logger.error(
+        'Lỗi khi gọi Groq API để gợi ý bài đăng:',
+        error?.message,
+      );
       throw new InternalServerErrorException(
         'Không thể kết nối đến dịch vụ AI để tạo gợi ý. Vui lòng thử lại sau.',
       );
@@ -284,11 +304,12 @@ Lưu ý:
         ],
         temperature: 0.3,
         max_tokens: 100,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object' },
       });
 
-      const replyContent = completion.choices[0]?.message?.content?.trim() ?? '{}';
-      
+      const replyContent =
+        completion.choices[0]?.message?.content?.trim() ?? '{}';
+
       let parsed: any = {};
       try {
         parsed = JSON.parse(replyContent);
@@ -301,9 +322,9 @@ Lưu ý:
           throw e;
         }
       }
-      
+
       return {
-        gia_goi_y: parsed.gia_goi_y
+        gia_goi_y: parsed.gia_goi_y,
       };
     } catch (error: any) {
       this.logger.error('Lỗi khi gọi Groq API để gợi ý giá:', error?.message);

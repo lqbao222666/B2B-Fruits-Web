@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ChungLoaiService } from './chung-loai.service';
 import { CreateChungLoaiDto } from './dto/create-chung-loai.dto';
 import { UpdateChungLoaiDto } from './dto/update-chung-loai.dto';
@@ -23,7 +31,10 @@ export class ChungLoaiController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateChungLoaiDto: UpdateChungLoaiDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateChungLoaiDto: UpdateChungLoaiDto,
+  ) {
     return this.chungLoaiService.update(+id, updateChungLoaiDto);
   }
 

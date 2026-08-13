@@ -1,20 +1,23 @@
-import api from './api.ts'
+import api from "./api.ts";
 
 export const Profile = {
   // Lấy profile (nếu chưa có sẽ tự tạo)
   async getCustomerProfile(accountId: number) {
-    const res = await api.get(`/customer_profile/${accountId}/profile`)
-    return res.data
+    const res = await api.get(`/customer_profile/${accountId}/profile`);
+    return res.data;
   },
 
   // Cập nhật profile
   async updateProfile(accountId: number, profileId: number, payload: any) {
-    const res = await api.put(`/customer_profile/${profileId}/profile/${accountId}`, payload)
-    return res.data
+    const res = await api.put(
+      `/customer_profile/${profileId}/profile/${accountId}`,
+      payload,
+    );
+    return res.data;
   },
-}
+};
 
-export default Profile
+export default Profile;
 // import api from './api.ts';
 
 // export const profile = {

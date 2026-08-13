@@ -51,6 +51,14 @@ export class CreateNhuCauDto {
   dia_chi_giao?: string;
 
   @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
   @IsDateString()
   ngay_bat_dau?: string;
 

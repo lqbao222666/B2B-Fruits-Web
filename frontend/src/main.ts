@@ -1,12 +1,12 @@
-import './style.css'
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
+import "./style.css";
+import { createApp } from "vue";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import router from "./router";
 import Toast, { type PluginOptions, POSITION } from "vue-toastification";
 import "vue-toastification/dist/index.css";
 
-const app = createApp(App)
+const app = createApp(App);
 
 const options: PluginOptions = {
   // Bạn có thể cấu hình vị trí và thời gian ở đây
@@ -22,10 +22,10 @@ const options: PluginOptions = {
   hideProgressBar: false,
   closeButton: "button",
   icon: true,
-  rtl: false
+  rtl: false,
 };
 
-app.use(createPinia())
-app.use(router)
-app.use(Toast, options)
-app.mount('#app')
+app.use(createPinia());
+app.use(router);
+app.use(Toast, options);
+app.mount("#app");
