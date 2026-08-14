@@ -256,8 +256,8 @@ const estimatedDistance = computed(() => {
   const item = nhuCau.value;
   const fLat = offerForm.value.latitude_cung_cap;
   const fLng = offerForm.value.longitude_cung_cap;
-  const eLat = item.latitude ? Number(item.latitude) : null;
-  const eLng = item.longitude ? Number(item.longitude) : null;
+  const eLat = (item as any).latitude ? Number((item as any).latitude) : null;
+  const eLng = (item as any).longitude ? Number((item as any).longitude) : null;
 
   if (fLat && fLng && eLat && eLng) {
     return getHaversineDistance(fLat, fLng, eLat, eLng);

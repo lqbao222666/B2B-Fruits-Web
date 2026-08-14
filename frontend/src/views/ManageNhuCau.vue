@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { useRouter } from "vue-router";
 import { NhuCauService, type NhuCauThuMua } from "@/service/nhucau";
 import { BaoGiaService } from "@/service/baogia";
 import { notify } from "@/utils/notifier";
 import Swal from "sweetalert2";
 
-const router = useRouter();
 const loading = ref(false);
 const activeTab = ref<"demands" | "received_offers">("demands");
 

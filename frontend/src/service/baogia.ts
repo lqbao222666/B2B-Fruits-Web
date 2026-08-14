@@ -8,6 +8,10 @@ export interface BaoGiaNhuCau {
   don_vi: string;
   gia_de_xuat: number;
   chenh_lech_gia: number;
+  tinh_thanh_cung_cap?: string;
+  dia_chi_cung_cap?: string;
+  latitude_cung_cap?: number;
+  longitude_cung_cap?: number;
   khoang_cach_km?: number;
   phi_van_chuyen?: number;
   ghi_chu?: string;
@@ -32,9 +36,14 @@ export const BaoGiaService = {
     don_vi: string;
     gia_de_xuat: number;
     chenh_lech_gia?: number;
+    tinh_thanh_cung_cap?: string;
+    dia_chi_cung_cap?: string;
+    latitude_cung_cap?: number;
+    longitude_cung_cap?: number;
     khoang_cach_km?: number;
     phi_van_chuyen?: number;
     ghi_chu?: string;
+    tieu_chuan_nong_dan?: string;
   }) => {
     const res = await api.post("/bao-gia", data);
     return res.data;

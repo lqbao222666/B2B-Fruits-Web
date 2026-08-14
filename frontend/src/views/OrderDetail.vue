@@ -205,6 +205,7 @@ const handlePayFarmerShipping = async (orderId: number, fee: number) => {
     isUpdating.value = false;
   }
 };
+void handlePayFarmerShipping;
 
 const submitEnterpriseDeposit = async (
   orderId: number,
@@ -231,6 +232,7 @@ const submitPayRemaining85 = async (
   orderId: number,
   remainingAmount: number,
 ) => {
+  void remainingAmount;
   isUpdating.value = true;
   try {
     await api.patch(`/don-hang/${orderId}`, {

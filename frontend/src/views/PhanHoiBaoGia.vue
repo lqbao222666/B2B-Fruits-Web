@@ -40,6 +40,8 @@ const userRole = computed(() => user.value?.role?.toLowerCase() || "");
 
 const isFarmer = computed(() => userRole.value === "nong_dan");
 const isEnterprise = computed(() => userRole.value === "doanh_nghiep");
+void userId;
+void isFarmer;
 
 const fetchBaoGia = async () => {
   loading.value = true;

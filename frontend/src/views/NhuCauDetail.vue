@@ -54,9 +54,6 @@ const provinces = [
 ];
 
 const isFarmer = computed(() => user.value?.role?.toUpperCase() === "NONG_DAN");
-const isEnterprise = computed(
-  () => user.value?.role?.toUpperCase() === "DOANH_NGHIEP",
-);
 const isOwner = computed(() => {
   if (!user.value || !nhuCau.value) return false;
   const userId = user.value.user_id || user.value.id;
@@ -123,6 +120,7 @@ const saveCurrentSupplyLocation = async () => {
     isSavingLocation.value = false;
   }
 };
+void saveCurrentSupplyLocation;
 
 const checkUser = () => {
   const saved = localStorage.getItem("user");
@@ -201,8 +199,8 @@ const estimatedDistance = computed(() => {
   const item = nhuCau.value;
   const fLat = offerForm.value.latitude_cung_cap;
   const fLng = offerForm.value.longitude_cung_cap;
-  const eLat = item.latitude ? Number(item.latitude) : null;
-  const eLng = item.longitude ? Number(item.longitude) : null;
+  const eLat = (item as any).latitude ? Number((item as any).latitude) : null;
+  const eLng = (item as any).longitude ? Number((item as any).longitude) : null;
 
   if (fLat && fLng && eLat && eLng) {
     return getHaversineDistance(fLat, fLng, eLat, eLng);
@@ -263,7 +261,7 @@ const submitOffer = async () => {
       icon: "success",
       title: "Gửi báo giá chào hàng thành công!",
       text: "Doanh nghiệp đã nhận được báo giá và sẽ phản hồi cho bạn sớm nhất.",
-      confirmColor: "#10b981",
+      confirmButtonColor: "#10b981",
     });
     showOfferModal.value = false;
     fetchDetail();

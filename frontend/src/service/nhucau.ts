@@ -13,6 +13,8 @@ export interface NhuCauThuMua {
   yeu_cau_chung_nhan?: string;
   tinh_thanh_giao?: string;
   dia_chi_giao?: string;
+  latitude?: number;
+  longitude?: number;
   ngay_bat_dau?: string;
   ngay_ket_thuc?: string;
   trang_thai: "dang_thu_mua" | "du_so_luong" | "tam_ngung" | "da_dong";
