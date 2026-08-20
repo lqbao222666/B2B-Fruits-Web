@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { GioHangController } from './gio-hang.controller';
 import { GioHangService } from './gio-hang.service';
-import { PrismaModule } from '../../prisma/prisma.module';
+import { PrismaModule } from '.././prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],

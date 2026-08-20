@@ -4,16 +4,50 @@ import { NhuCauService, type NhuCauThuMua } from "@/service/nhucau";
 import { notify } from "@/utils/notifier";
 import Swal from "sweetalert2";
 
+import { computed } from "vue";
+
 const loading = ref(false);
 const nhuCauList = ref<NhuCauThuMua[]>([]);
 const searchKeyword = ref("");
 const selectedStatus = ref("all");
 
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const filteredList = computed(() => {
+  if (!searchKeyword.value) return nhuCauList.value;
+  const kw = searchKeyword.value.toLowerCase();
+  return nhuCauList.value.filter((item) => {
+    return (
+      (item.ten_nong_san && item.ten_nong_san.toLowerCase().includes(kw)) ||
+      (item.doanhNghiep?.ten_cong_ty && item.doanhNghiep.ten_cong_ty.toLowerCase().includes(kw)) ||
+      (item.doanhNghiep?.user?.full_name && item.doanhNghiep.user.full_name.toLowerCase().includes(kw))
+    );
+  });
+});
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredList.value.length / itemsPerPage);
+});
+
+const paginatedList = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredList.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
+
 const fetchAllDemands = async () => {
   loading.value = true;
+  currentPage.value = 1;
   try {
     const data = await NhuCauService.getAll({
-      ten_nong_san: searchKeyword.value || undefined,
       trang_thai:
         selectedStatus.value !== "all" ? selectedStatus.value : undefined,
     });
@@ -88,9 +122,8 @@ onMounted(() => {
         <input
           v-model="searchKeyword"
           type="text"
-          placeholder="Tìm nông sản..."
-          class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-          @keyup.enter="fetchAllDemands"
+          placeholder="Tìm nông sản, doanh nghiệp..."
+          class="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs w-[220px] outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
         />
         <select
           v-model="selectedStatus"
@@ -130,7 +163,7 @@ onMounted(() => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr
-            v-for="item in nhuCauList"
+            v-for="item in paginatedList"
             :key="item.nhucau_id"
             class="hover:bg-slate-50/80 transition"
           >
@@ -175,6 +208,33 @@ onMounted(() => {
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-slate-100">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &lt;
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="w-8 h-8 flex items-center justify-center rounded-lg font-bold transition"
+          :class="currentPage === page ? 'bg-emerald-600 text-white border border-emerald-600' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &gt;
+        </button>
+      </div>
     </div>
   </div>
 </template>

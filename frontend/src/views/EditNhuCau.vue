@@ -7,6 +7,7 @@ import api from "@/service/api";
 import { notify } from "@/utils/notifier";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { extractProvinceName } from "@/utils/provinceHelper";
 
 // Fix Leaflet marker icons
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
@@ -242,7 +243,10 @@ watch(selectedSavedLocation, (val) => {
     const loc = savedLocations.value.find((l) => l.id == val);
     if (loc) {
       moveToLocation(Number(loc.latitude), Number(loc.longitude));
-      if (loc.dia_chi) form.value.dia_chi_giao = loc.dia_chi;
+      if (loc.dia_chi) {
+        form.value.tinh_thanh_giao = extractProvinceName(loc.dia_chi);
+        form.value.dia_chi_giao = loc.dia_chi;
+      }
     }
   }
 });
@@ -578,12 +582,21 @@ onMounted(async () => {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-1"
-              >Chọn từ Địa Chỉ Đã Lưu:</label
-            >
+            <div class="flex items-center justify-between mb-1">
+              <label class="block font-bold text-slate-700"
+                >Chọn từ Địa Chỉ Đã Lưu:</label
+              >
+              <router-link
+                to="/profile"
+                class="text-[11px] text-emerald-600 hover:underline font-bold flex items-center gap-1"
+              >
+                <span class="material-symbols-outlined text-xs">add_location_alt</span>
+                {{ savedLocations.length > 0 ? 'Quản lý kho' : '+ Thêm kho đã lưu' }}
+              </router-link>
+            </div>
             <select
               v-model="selectedSavedLocation"
-              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+              class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-medium"
             >
               <option value="">-- Chọn vị trí nhà kho đã lưu --</option>
               <option

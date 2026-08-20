@@ -3,10 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateBaiDangDto } from './dto/create-bai-dang.dto';
 import { UpdateBaiDangDto } from './dto/update-bai-dang.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { getProvincesByRegion } from '../common/regions';
 
 /// Thông tin include dùng chung cho chi tiết đầy đủ
 const INCLUDE_FULL = {
@@ -58,8 +59,11 @@ export class BaiDangRepository {
           : undefined,
         han_su_dung: data.han_su_dung ? new Date(data.han_su_dung) : undefined,
         images: data.images ?? [],
-        video_url: data.video_url,
         is_seasonal: data.is_seasonal ?? false,
+        loai_cung_cap: data.loai_cung_cap ?? 'lay_hang_ngay',
+        ngay_bat_dau_cung_cap: data.loai_cung_cap === 'du_kien' && data.ngay_bat_dau_cung_cap
+          ? new Date(data.ngay_bat_dau_cung_cap)
+          : new Date(),
         trang_thai: 'dang_ban',
         checked_at: new Date(),
         tieuChuans:
@@ -123,24 +127,73 @@ export class BaiDangRepository {
     ten_nong_san?: string;
     gia_min?: number;
     gia_max?: number;
+    mien?: string;
+    so_luong_min?: number;
+    tieu_chuan?: string;
+    rating_min?: number;
+    sort?: string;
   }) {
+    const regionProvinces = filters?.mien
+      ? getProvincesByRegion(filters.mien)
+      : [];
+
+    let orderBy: any = { created_at: 'desc' };
+    if (filters?.sort === 'price-asc') {
+      orderBy = { gia_per_kg: 'asc' };
+    } else if (filters?.sort === 'price-desc') {
+      orderBy = { gia_per_kg: 'desc' };
+    } else if (filters?.sort === 'qty-desc') {
+      orderBy = { so_luong_con_lai: 'desc' };
+    }
+
     return this.prisma.baiDang.findMany({
       where: {
         trang_thai: 'dang_ban',
         so_luong_con_lai: { gt: 0 },
         ...(filters?.tinh_thanh && { tinh_thanh: filters.tinh_thanh }),
+        ...(filters?.mien && regionProvinces.length > 0 && {
+          tinh_thanh: { in: regionProvinces },
+        }),
         ...(filters?.danhmuc_id && { danhmuc_id: filters.danhmuc_id }),
         ...(filters?.ten_nong_san && {
-          ten_nong_san: {
-            contains: filters.ten_nong_san,
-            mode: 'insensitive' as const,
-          },
+          OR: [
+            {
+              ten_nong_san: {
+                contains: filters.ten_nong_san,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              tieu_de: {
+                contains: filters.ten_nong_san,
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
         }),
         ...(filters?.gia_min !== undefined && {
           gia_per_kg: { gte: filters.gia_min },
         }),
         ...(filters?.gia_max !== undefined && {
           gia_per_kg: { lte: filters.gia_max },
+        }),
+        ...(filters?.so_luong_min !== undefined && {
+          so_luong_con_lai: { gte: filters.so_luong_min },
+        }),
+        ...(filters?.tieu_chuan && {
+          tieuChuans: {
+            some: {
+              ten_tieu_chuan: {
+                equals: filters.tieu_chuan,
+                mode: 'insensitive' as const,
+              },
+            },
+          },
+        }),
+        ...(filters?.rating_min !== undefined && {
+          nguoiDang: {
+            diem_trung_binh: { gte: filters.rating_min },
+          },
         }),
       },
       include: {
@@ -153,7 +206,7 @@ export class BaiDangRepository {
         phanLoais: true,
         tieuChuans: true,
       },
-      orderBy: { created_at: 'desc' },
+      orderBy,
     });
   }
 
@@ -206,11 +259,30 @@ export class BaiDangRepository {
       Number(data.so_luong_con_lai) <= 0
     ) {
       newTrangThai = 'da_ban';
+    } else if (
+      data.so_luong_con_lai !== undefined &&
+      Number(data.so_luong_con_lai) > 0 &&
+      (newTrangThai === 'da_ban' || newTrangThai === 'an')
+    ) {
+      newTrangThai = 'dang_ban';
     } else if (newTrangThai === 'cho_duyet' || !newTrangThai) {
       newTrangThai = 'dang_ban';
     }
 
-    const { tieu_chuan_ids, phan_loais, ...restData } = data;
+    const { tieu_chuan_ids, phan_loais, ...rawRest } = data;
+    const restData = { ...rawRest };
+    delete (restData as any).phan_loais;
+    delete (restData as any).tieu_chuan_ids;
+
+    if (restData.ngay_bat_dau_cung_cap) {
+      restData.ngay_bat_dau_cung_cap = new Date(restData.ngay_bat_dau_cung_cap) as any;
+    }
+    if (restData.ngay_thu_hoach) {
+      restData.ngay_thu_hoach = new Date(restData.ngay_thu_hoach) as any;
+    }
+    if (restData.han_su_dung) {
+      restData.han_su_dung = new Date(restData.han_su_dung) as any;
+    }
 
     if (phan_loais && phan_loais.length > 0) {
       const existingPhanLoais = await this.prisma.phanLoaiSanPham.findMany({
@@ -248,6 +320,21 @@ export class BaiDangRepository {
         where: { baidang_id, ten_phan_loai: { notIn: currentNames } },
         data: { so_luong_con_lai: 0 },
       });
+    } else if (
+      data.so_luong_con_lai !== undefined &&
+      Number(data.so_luong_con_lai) > 0
+    ) {
+      const existingPhanLoais = await this.prisma.phanLoaiSanPham.findMany({
+        where: { baidang_id },
+      });
+      for (const pl of existingPhanLoais) {
+        if (Number(pl.so_luong_con_lai) <= 0) {
+          await this.prisma.phanLoaiSanPham.update({
+            where: { phanloai_id: pl.phanloai_id },
+            data: { so_luong_con_lai: pl.so_luong_co },
+          });
+        }
+      }
     }
 
     const updated = await this.prisma.baiDang.update({

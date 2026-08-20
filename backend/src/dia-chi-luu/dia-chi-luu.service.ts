@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DiaChiLuuService {
@@ -27,6 +27,19 @@ export class DiaChiLuuService {
   async remove(id: number) {
     return this.prisma.diaChiLuu.delete({
       where: { id },
+    });
+  }
+
+  async update(id: number, updateDto: any) {
+    const data: any = {};
+    if (updateDto.ten_goi !== undefined) data.ten_goi = updateDto.ten_goi;
+    if (updateDto.dia_chi !== undefined) data.dia_chi = updateDto.dia_chi;
+    if (updateDto.latitude !== undefined) data.latitude = updateDto.latitude;
+    if (updateDto.longitude !== undefined) data.longitude = updateDto.longitude;
+
+    return this.prisma.diaChiLuu.update({
+      where: { id },
+      data,
     });
   }
 }

@@ -13,10 +13,44 @@ const loading = ref(false);
 const nhuCauList = ref<NhuCauThuMua[]>([]);
 const categories = ref<any[]>([]);
 
-// Filter states
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 12;
+
+const totalPages = computed(() => {
+  return Math.ceil(nhuCauList.value.length / itemsPerPage);
+});
+
+const paginatedNhuCauList = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return nhuCauList.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+
+import { useRoute } from "vue-router";
+
+const route = useRoute();
+
+// Filter states mở rộng
 const searchKeyword = ref("");
 const selectedProvince = ref("");
+const selectedRegion = ref("");
 const selectedCategory = ref<number | null>(null);
+const presetMinQuantity = ref<number | null>(null);
+const minQuantityInput = ref<number | null>(null);
+const presetPriceRange = ref<string>("");
+const minPriceInput = ref<number | null>(null);
+const maxPriceInput = ref<number | null>(null);
+const selectedStandard = ref<string>("");
+const selectedNegotiation = ref<string>("");
+const selectedSort = ref<string>("newest");
 
 // Saved locations state
 const savedLocations = ref<any[]>([]);
@@ -146,14 +180,65 @@ const fetchCategories = async () => {
   }
 };
 
+const resetFilters = () => {
+  searchKeyword.value = "";
+  selectedProvince.value = "";
+  selectedRegion.value = "";
+  selectedCategory.value = null;
+  presetMinQuantity.value = null;
+  minQuantityInput.value = null;
+  presetPriceRange.value = "";
+  minPriceInput.value = null;
+  maxPriceInput.value = null;
+  selectedStandard.value = "";
+  selectedNegotiation.value = "";
+  selectedSort.value = "newest";
+  fetchNhuCauList();
+};
+
 const fetchNhuCauList = async () => {
   loading.value = true;
+  currentPage.value = 1;
   try {
+    let computedGiaMin: number | undefined = minPriceInput.value
+      ? minPriceInput.value * 1000
+      : undefined;
+    let computedGiaMax: number | undefined = maxPriceInput.value
+      ? maxPriceInput.value * 1000
+      : undefined;
+
+    if (!computedGiaMin && !computedGiaMax && presetPriceRange.value) {
+      if (presetPriceRange.value === "under-30") computedGiaMax = 30000;
+      else if (presetPriceRange.value === "30-50") {
+        computedGiaMin = 30000;
+        computedGiaMax = 50000;
+      } else if (presetPriceRange.value === "over-50") {
+        computedGiaMin = 50000;
+      }
+    }
+
+    const minQty =
+      minQuantityInput.value !== null && minQuantityInput.value !== undefined
+        ? minQuantityInput.value
+        : (presetMinQuantity.value ?? undefined);
+
     const data = await NhuCauService.getAll({
       ten_nong_san: searchKeyword.value || undefined,
       tinh_thanh_giao: selectedProvince.value || undefined,
       danhmuc_id: selectedCategory.value || undefined,
       trang_thai: "dang_thu_mua",
+      mien: selectedRegion.value || undefined,
+      so_luong_min: minQty,
+      gia_min: computedGiaMin,
+      gia_max: computedGiaMax,
+      yeu_cau_chung_nhan: selectedStandard.value || undefined,
+      cho_thuong_luong:
+        selectedNegotiation.value === "true"
+          ? true
+          : selectedNegotiation.value === "false"
+            ? false
+            : undefined,
+      sort: selectedSort.value || undefined,
     });
     nhuCauList.value = data || [];
   } catch (e: any) {
@@ -290,7 +375,34 @@ const formatDate = (dateStr?: string) => {
   return new Date(dateStr).toLocaleDateString("vi-VN");
 };
 
+watch(
+  () => route.query,
+  () => {
+    if (route.query.keyword !== undefined) searchKeyword.value = String(route.query.keyword || "");
+    if (route.query.province !== undefined) selectedProvince.value = String(route.query.province || "");
+    if (route.query.region !== undefined) selectedRegion.value = String(route.query.region || "");
+    if (route.query.category !== undefined) selectedCategory.value = route.query.category ? Number(route.query.category) : null;
+    if (route.query.minQuantity !== undefined) presetMinQuantity.value = route.query.minQuantity ? Number(route.query.minQuantity) : null;
+    if (route.query.standard !== undefined) selectedStandard.value = String(route.query.standard || "");
+    if (route.query.maxPrice !== undefined) maxPriceInput.value = route.query.maxPrice ? Number(route.query.maxPrice) / 1000 : null;
+    if (route.query.minPrice !== undefined) minPriceInput.value = route.query.minPrice ? Number(route.query.minPrice) / 1000 : null;
+    if (route.query.sort !== undefined) selectedSort.value = String(route.query.sort || "newest");
+    fetchNhuCauList();
+  },
+  { deep: true },
+);
+
 onMounted(() => {
+  if (route.query.keyword) searchKeyword.value = String(route.query.keyword);
+  if (route.query.province) selectedProvince.value = String(route.query.province);
+  if (route.query.region) selectedRegion.value = String(route.query.region);
+  if (route.query.category) selectedCategory.value = Number(route.query.category);
+  if (route.query.minQuantity) presetMinQuantity.value = Number(route.query.minQuantity);
+  if (route.query.standard) selectedStandard.value = String(route.query.standard);
+  if (route.query.maxPrice) maxPriceInput.value = Number(route.query.maxPrice) / 1000;
+  if (route.query.minPrice) minPriceInput.value = Number(route.query.minPrice) / 1000;
+  if (route.query.sort) selectedSort.value = String(route.query.sort);
+
   checkUser();
   fetchCategories();
   fetchNhuCauList();
@@ -308,9 +420,9 @@ onMounted(() => {
       ></div>
       <div class="relative z-10 max-w-3xl space-y-4">
         <div
-          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-xs font-semibold backdrop-blur-md"
+          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-sm font-semibold backdrop-blur-md"
         >
-          <span>🏬</span> Sàn Giao Dịch Nhu Cầu Thu Mua B2B
+          Sàn Giao Dịch Nhu Cầu Thu Mua B2B
         </div>
         <h1
           class="text-3xl md:text-5xl font-black tracking-tight leading-tight"
@@ -324,12 +436,19 @@ onMounted(() => {
           doanh nghiệp
         </p>
 
-        <div class="pt-2 flex flex-wrap gap-4" v-if="isEnterprise">
+        <div class="pt-2 flex flex-wrap gap-3" v-if="isEnterprise">
           <RouterLink
             to="/quan-ly-nhu-cau"
-            class="inline-flex items-center gap-2 px-6 py-3 bg-white text-emerald-800 font-bold rounded-2xl shadow-lg hover:bg-emerald-50 transition transform hover:-translate-y-0.5"
+            class="inline-flex items-center gap-2 px-5 py-3 bg-white text-emerald-800 font-bold rounded-2xl shadow-lg hover:bg-emerald-50 transition transform hover:-translate-y-0.5"
           >
-            <span>➕</span> Đăng nhu cầu thu mua của Doanh nghiệp
+            Quản Lý Nhu Cầu Của Tôi
+          </RouterLink>
+
+          <RouterLink
+            to="/create-nhu-cau"
+            class="inline-flex items-center gap-2 px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-white font-bold rounded-2xl shadow-lg transition transform hover:-translate-y-0.5"
+          >
+            Đăng Nhu Cầu Mới
           </RouterLink>
         </div>
       </div>
@@ -339,60 +458,151 @@ onMounted(() => {
     <div class="flex items-center gap-4 border-b border-slate-200 pb-4">
       <RouterLink
         to="/products"
-        class="px-6 py-3 rounded-2xl font-bold text-sm uppercase tracking-wide transition-all text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-800"
+        class="px-6 py-3 rounded-2xl font-bold text-base uppercase tracking-wide transition-all text-slate-500 bg-slate-100 hover:bg-slate-200 hover:text-slate-800"
       >
-        🌾 Sản Phẩm Nông Dân Đăng Bán
+        Sản Phẩm Nông Dân Đăng Bán
       </RouterLink>
       <RouterLink
         to="/nhu-cau"
-        class="px-6 py-3 rounded-2xl font-black text-sm uppercase tracking-wide transition-all bg-[#2E7D32] text-white shadow-lg transform -translate-y-0.5"
+        class="px-6 py-3 rounded-2xl font-black text-base uppercase tracking-wide transition-all bg-[#2E7D32] text-white shadow-lg transform -translate-y-0.5"
       >
-        🏢 Yêu Cầu Thu Mua Của Doanh Nghiệp
+        Yêu Cầu Thu Mua Của Doanh Nghiệp
       </RouterLink>
     </div>
 
     <!-- ===== SEARCH & FILTER BAR ===== -->
     <div
-      class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 space-y-4"
+      class="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/90 space-y-5"
     >
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <!-- Search Keyword -->
-        <div class="relative col-span-1 md:col-span-2">
-          <span
-            class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg"
-            >🔍</span
-          >
+      <!-- Row 1: Search keyword, Sort & Reset -->
+      <div class="flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div class="relative flex-1 w-full">
           <input
             v-model="searchKeyword"
             type="text"
-            placeholder="Tìm theo tên nông sản (Sầu riêng, Xoài, Thanh long...)..."
-            class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            placeholder="Tìm theo tên nông sản, công ty thu mua, mô tả (Sầu riêng, Xoài, Thanh long...)..."
+            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
             @keyup.enter="fetchNhuCauList"
           />
         </div>
 
-        <!-- Province Filter -->
-        <div>
+        <div class="flex items-center gap-3 w-full lg:w-auto">
+          <!-- Sort dropdown -->
           <select
-            v-model="selectedProvince"
-            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            v-model="selectedSort"
+            class="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition cursor-pointer"
             @change="fetchNhuCauList"
           >
-            <option value="">Tất cả khu vực giao hàng</option>
+            <option value="newest">Mới nhất</option>
+
+            <option value="qty_desc">Số lượng cần (Cao ➔ Thấp)</option>
+            <option value="qty_asc">Số lượng cần (Thấp ➔ Cao)</option>
+            <option value="price_desc">Giá tham khảo (Cao ➔ Thấp)</option>
+            <option value="price_asc">Giá tham khảo (Thấp ➔ Cao)</option>
+          </select>
+
+          <!-- Nút áp dụng / Nút làm mới -->
+          <button
+            @click="fetchNhuCauList"
+            class="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-2xl shadow transition flex items-center gap-1.5"
+          >
+            Áp dụng
+          </button>
+          <button
+            @click="resetFilters"
+            class="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm rounded-2xl transition"
+            title="Đặt lại bộ lọc"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Row 2: Filter by Region (Miền) -->
+      <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+        <span class="text-sm font-bold text-slate-500 mr-2 flex items-center gap-1">
+          Vùng miền:
+        </span>
+        <button
+          type="button"
+          @click="selectedRegion = ''; fetchNhuCauList();"
+          class="px-3.5 py-1.5 rounded-xl text-sm font-bold transition border"
+          :class="
+            selectedRegion === ''
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+          "
+        >
+          Tất cả vùng miền
+        </button>
+        <button
+          type="button"
+          @click="selectedRegion = 'bac'; fetchNhuCauList();"
+          class="px-3.5 py-1.5 rounded-xl text-sm font-bold transition border"
+          :class="
+            selectedRegion === 'bac'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+          "
+        >
+          Miền Bắc
+        </button>
+        <button
+          type="button"
+          @click="selectedRegion = 'trung'; fetchNhuCauList();"
+          class="px-3.5 py-1.5 rounded-xl text-sm font-bold transition border"
+          :class="
+            selectedRegion === 'trung'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+          "
+        >
+          Miền Trung / Tây Nguyên
+        </button>
+        <button
+          type="button"
+          @click="selectedRegion = 'nam'; fetchNhuCauList();"
+          class="px-3.5 py-1.5 rounded-xl text-sm font-bold transition border"
+          :class="
+            selectedRegion === 'nam'
+              ? 'bg-emerald-700 text-white border-emerald-700 shadow-sm'
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+          "
+        >
+          Miền Nam / Miền Tây
+        </button>
+      </div>
+
+      <!-- Row 3: Grid of filters (Province, Category, Min Qty, Price, Standard, Negotiation) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 pt-2">
+        <!-- Province -->
+        <div>
+          <label class="block text-sm font-bold text-slate-500 mb-1"
+            >Tỉnh/Thành giao hàng:</label
+          >
+          <select
+            v-model="selectedProvince"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            @change="fetchNhuCauList"
+          >
+            <option value="">Tất cả tỉnh thành</option>
             <option v-for="prov in provinces" :key="prov" :value="prov">
               {{ prov }}
             </option>
           </select>
         </div>
 
-        <!-- Category Filter -->
+        <!-- Category -->
         <div>
+          <label class="block text-sm font-bold text-slate-500 mb-1"
+            >Danh mục nông sản:</label
+          >
           <select
             v-model="selectedCategory"
-            class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
             @change="fetchNhuCauList"
           >
-            <option :value="null">Tất cả danh mục nông sản</option>
+            <option :value="null">Tất cả danh mục</option>
             <option
               v-for="cat in categories"
               :key="cat.danhmuc_id"
@@ -400,6 +610,61 @@ onMounted(() => {
             >
               {{ cat.ten_danh_muc }}
             </option>
+          </select>
+        </div>
+
+        <!-- Min Quantity Needed -->
+        <div>
+          <label class="block text-sm font-bold text-slate-500 mb-1"
+            >Số lượng cần tối thiểu:</label
+          >
+          <select
+            v-model="presetMinQuantity"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            @change="fetchNhuCauList"
+          >
+            <option :value="null">Tất cả quy mô số lượng</option>
+            <option :value="100">≥ 100 kg</option>
+            <option :value="500">≥ 500 kg</option>
+            <option :value="1000">≥ 1 Tấn (1.000 kg)</option>
+            <option :value="5000">≥ 5 Tấn (5.000 kg)</option>
+            <option :value="10000">≥ 10 Tấn (10.000 kg)</option>
+          </select>
+        </div>
+
+        <!-- Certificate standard requirement -->
+        <div>
+          <label class="block text-sm font-bold text-slate-500 mb-1"
+            >Yêu cầu chứng nhận:</label
+          >
+          <select
+            v-model="selectedStandard"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            @change="fetchNhuCauList"
+          >
+            <option value="">Tất cả chứng nhận</option>
+            <option value="VietGAP">VietGAP</option>
+            <option value="GlobalGAP">GlobalGAP</option>
+            <option value="Hữu cơ (Organic)">Hữu cơ (Organic)</option>
+            <option value="OCOP">Tiêu chuẩn OCOP</option>
+            <option value="ISO 22000">ISO 22000</option>
+          </select>
+        </div>
+
+        <!-- Price Range preset & Custom Min/Max -->
+        <div>
+          <label class="block text-sm font-bold text-slate-500 mb-1"
+            >Mức giá tham khảo:</label
+          >
+          <select
+            v-model="presetPriceRange"
+            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+            @change="minPriceInput = null; maxPriceInput = null; fetchNhuCauList();"
+          >
+            <option value="">Tất cả khoảng giá</option>
+            <option value="under-30">Dưới 30.000đ/đơn vị</option>
+            <option value="30-50">Từ 30.000đ - 50.000đ</option>
+            <option value="over-50">Trên 50.000đ/đơn vị</option>
           </select>
         </div>
       </div>
@@ -428,7 +693,7 @@ onMounted(() => {
 
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div
-        v-for="item in nhuCauList"
+        v-for="item in paginatedNhuCauList"
         :key="item.nhucau_id"
         class="bg-white rounded-2xl border border-slate-200/90 hover:border-emerald-500/50 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between overflow-hidden group"
       >
@@ -438,20 +703,15 @@ onMounted(() => {
             class="flex items-center justify-between gap-3 border-b border-slate-100 pb-3"
           >
             <div class="flex items-center gap-3">
-              <div
-                class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-black text-base"
-              >
-                🏢
-              </div>
               <div>
-                <h4 class="font-bold text-slate-800 text-sm line-clamp-1">
+                <h4 class="font-bold text-slate-800 text-lg line-clamp-1">
                   {{
                     item.doanhNghiep?.ten_cong_ty ||
                     item.doanhNghiep?.user?.full_name ||
                     "Doanh Nghiệp Thu Mua"
                   }}
                 </h4>
-                <p class="text-xs text-slate-500 flex items-center gap-1">
+                <p class="text-sm text-slate-500 flex items-center gap-1 mt-1">
                   <span>📍</span> {{ item.tinh_thanh_giao || "Toàn quốc" }}
                 </p>
               </div>
@@ -473,7 +733,7 @@ onMounted(() => {
               {{ item.danhMuc.ten_danh_muc }}
             </span>
             <h3
-              class="text-lg font-black text-slate-900 mt-1 group-hover:text-emerald-700 transition"
+              class="text-xl font-black text-slate-900 mt-1 group-hover:text-emerald-700 transition"
             >
               {{ item.ten_nong_san }}
             </h3>
@@ -561,13 +821,48 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Pagination Controls -->
+    <div v-if="totalPages > 1" class="flex justify-center items-center gap-2 mt-8">
+      <button
+        @click="goToPage(currentPage - 1)"
+        :disabled="currentPage === 1"
+        class="w-10 h-10 flex items-center justify-center rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+      >
+        &lt;
+      </button>
+      
+      <div class="flex items-center gap-1.5 overflow-x-auto max-w-[200px] sm:max-w-none">
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="w-10 h-10 flex items-center justify-center rounded-xl font-bold transition flex-shrink-0"
+          :class="
+            currentPage === page
+              ? 'bg-emerald-600 text-white shadow-md'
+              : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          "
+        >
+          {{ page }}
+        </button>
+      </div>
+
+      <button
+        @click="goToPage(currentPage + 1)"
+        :disabled="currentPage === totalPages"
+        class="w-10 h-10 flex items-center justify-center rounded-xl font-bold transition disabled:opacity-50 disabled:cursor-not-allowed bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+      >
+        &gt;
+      </button>
+    </div>
+
     <!-- ===== MODAL GỬI BÁO GIÁ CHÀO HÀNG ===== -->
     <div
       v-if="showOfferModal && selectedNhuCau"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-[9999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fade-in"
     >
       <div
-        class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative border border-slate-100"
+        class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative border border-slate-100 max-h-[82vh] overflow-y-auto my-auto"
       >
         <!-- Header -->
         <div

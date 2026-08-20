@@ -65,6 +65,18 @@ const searchUserByPhone = async (phone: string) => {
   return res.data;
 };
 
+const searchUsers = async (query: string) => {
+  const res = await api.get(`/tin-nhan/search-users`, {
+    params: { q: query },
+  });
+  return res.data;
+};
+
+const getUserDetail = async (userId: number) => {
+  const res = await api.get(`/tin-nhan/user-detail/${userId}`);
+  return res.data;
+};
+
 export default {
   getConversations,
   getConversation,
@@ -72,4 +84,6 @@ export default {
   uploadFile,
   markAsRead,
   searchUserByPhone,
+  searchUsers,
+  getUserDetail,
 };

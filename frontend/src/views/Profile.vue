@@ -5,6 +5,7 @@ import { Account } from "@/service/account.ts";
 import { notify } from "@/utils/notifier.ts";
 import api from "@/service/api.ts";
 import LocationSelector from "@/components/LocationSelector.vue";
+import SavedLocationsManager from "@/components/SavedLocationsManager.vue";
 
 const router = useRouter();
 const isEditing = ref(false);
@@ -466,11 +467,11 @@ onMounted(fetchProfile);
               <!-- Avatar Selection Modal -->
               <div
                 v-if="showAvatarModal"
-                class="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4 backdrop-blur-sm"
+                class="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto backdrop-blur-sm"
                 @click.self="showAvatarModal = false"
               >
                 <div
-                  class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl relative animate-fadeIn"
+                  class="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl relative animate-fadeIn max-h-[82vh] overflow-y-auto my-auto"
                 >
                   <button
                     @click="showAvatarModal = false"
@@ -977,6 +978,9 @@ onMounted(fetchProfile);
           </form>
         </div>
       </div>
+
+      <!-- Quản lý Kho & Vị trí đã lưu (Tách biệt khỏi form sửa thông tin cá nhân) -->
+      <SavedLocationsManager :userId="accountInfo.id" />
     </div>
 
     <input

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateDanhGiaDto } from './dto/create-danh-gia.dto';
 import { ReplyDanhGiaDto } from './dto/reply-danh-gia.dto';
 
@@ -14,8 +14,6 @@ export class DanhGiaRepository {
   async create(nguoi_danhgia_id: number, data: CreateDanhGiaDto) {
     return this.prisma.$transaction(async (tx) => {
       const donhang_id = Number(data.donhang_id);
-      const baidang_id = Number(data.baidang_id);
-      const nguoi_duoc_dg_id = Number(data.nguoi_duoc_dg_id);
       const numericNguoiDanhGiaId = Number(nguoi_danhgia_id);
 
       if (isNaN(numericNguoiDanhGiaId) || numericNguoiDanhGiaId <= 0) {
@@ -25,13 +23,21 @@ export class DanhGiaRepository {
       }
 
       // 1. Kiểm tra đơn hàng có tồn tại và đã hoàn thành chưa
-      const donHang = await tx.donHang.findUnique({ where: { donhang_id } });
+      const donHang = await tx.donHang.findUnique({
+        where: { donhang_id },
+      });
       if (!donHang) throw new NotFoundException('Đơn hàng không tồn tại');
       if (donHang.trang_thai_don !== 'hoan_thanh') {
         throw new BadRequestException(
           'Chỉ có thể đánh giá khi đơn hàng đã hoàn thành',
         );
       }
+
+      const baidang_id = data.baidang_id || donHang.baidang_id ? Number(data.baidang_id || donHang.baidang_id) : null;
+      const nhucau_id = data.nhucau_id || donHang.nhucau_id ? Number(data.nhucau_id || donHang.nhucau_id) : null;
+      const nguoi_duoc_dg_id = Number(
+        data.nguoi_duoc_dg_id || donHang.nguoi_ban_id,
+      );
 
       if (donHang.nguoi_mua_id !== numericNguoiDanhGiaId) {
         throw new BadRequestException(
@@ -50,6 +56,7 @@ export class DanhGiaRepository {
         data: {
           donhang_id,
           baidang_id,
+          nhucau_id,
           nguoi_danhgia_id: numericNguoiDanhGiaId,
           nguoi_duoc_dg_id,
           diem_tong: Number(data.diem_tong),
@@ -63,19 +70,21 @@ export class DanhGiaRepository {
         },
       });
 
-      // 4. Tính toán lại điểm trung bình cho Bài Đăng
-      const baidangAgg = await tx.danhGia.aggregate({
-        where: { baidang_id },
-        _avg: { diem_tong: true },
-      });
-      if (
-        baidangAgg._avg.diem_tong !== null &&
-        baidangAgg._avg.diem_tong !== undefined
-      ) {
-        await tx.baiDang.update({
+      // 4. Tính toán lại điểm trung bình cho Bài Đăng (nếu có)
+      if (baidang_id && baidang_id > 0) {
+        const baidangAgg = await tx.danhGia.aggregate({
           where: { baidang_id },
-          data: { diem_trung_binh: baidangAgg._avg.diem_tong },
+          _avg: { diem_tong: true },
         });
+        if (
+          baidangAgg._avg.diem_tong !== null &&
+          baidangAgg._avg.diem_tong !== undefined
+        ) {
+          await tx.baiDang.update({
+            where: { baidang_id },
+            data: { diem_trung_binh: baidangAgg._avg.diem_tong },
+          });
+        }
       }
 
       // 5. Tính toán lại điểm trung bình cho Nông Dân
@@ -140,6 +149,9 @@ export class DanhGiaRepository {
         nguoiDanhGia: { select: { full_name: true, avatar_url: true } },
         baiDang: {
           select: { tieu_de: true, ten_nong_san: true, images: true },
+        },
+        nhuCau: {
+          select: { ten_nong_san: true },
         },
       },
       orderBy: { created_at: 'desc' },

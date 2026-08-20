@@ -59,6 +59,12 @@ const router = createRouter({
       component: () => import("../views/Profile.vue"),
     },
     {
+      path: "/partner/:id",
+      alias: ["/user/:id", "/ho-so/:id"],
+      name: "partner-profile",
+      component: () => import("../views/PartnerProfile.vue"),
+    },
+    {
       path: "/messages",
       name: "messages",
       component: () => import("../views/Messages.vue"),
@@ -136,6 +142,19 @@ const router = createRouter({
       path: "/create-nhu-cau",
       name: "CreateNhuCau",
       component: () => import("@/views/CreateNhuCau.vue"),
+      meta: { requiresAuth: true },
+    },
+    // === THƯƠNG LƯỢNG B2B (Bài Đăng) ===
+    {
+      path: "/quan-ly-thuong-luong",
+      name: "ManageThuongLuong",
+      component: () => import("@/views/ManageThuongLuong.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/thuong-luong/:id",
+      name: "ThuongLuongDetail",
+      component: () => import("@/views/ThuongLuongDetail.vue"),
       meta: { requiresAuth: true },
     },
     {

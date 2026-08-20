@@ -39,13 +39,13 @@ const isAuthPage = computed(() => {
     <Navbar v-if="!isAuthPage" class="relative z-30" />
 
     <main
-      class="flex-grow relative z-10 transition-all duration-300"
+      class="flex-grow transition-all duration-300"
       :class="{ 'px-4 sm:px-6 lg:px-8 py-6': !isAuthPage }"
     >
       <div :class="{ 'container mx-auto': !isAuthPage }">
-        <RouterView v-slot="{ Component }">
+        <RouterView v-slot="{ Component, route: currentRoute }">
           <transition name="fade-slide" mode="out-in">
-            <component :is="Component" />
+            <component :is="Component" :key="currentRoute.path" />
           </transition>
         </RouterView>
       </div>

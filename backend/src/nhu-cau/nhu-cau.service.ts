@@ -16,6 +16,13 @@ export class NhuCauService {
     tinh_thanh_giao?: string;
     danhmuc_id?: number;
     trang_thai?: string;
+    mien?: string;
+    so_luong_min?: number;
+    gia_min?: number;
+    gia_max?: number;
+    yeu_cau_chung_nhan?: string;
+    cho_thuong_luong?: boolean;
+    sort?: string;
   }) {
     return this.repository.findAll(query);
   }

@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from "vue";
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import TinNhanService, {
   type Conversation,
   type Message,
 } from "@/service/tinnhan.ts";
 import { notify } from "@/utils/notifier.ts";
+
+import PartnerDetailModal from "@/components/PartnerDetailModal.vue";
+import socketService from "@/service/socket";
 
 const route = useRoute();
 const router = useRouter();
@@ -47,7 +50,6 @@ const fetchConversations = async () => {
 const fetchMessages = async (partnerId: number) => {
   try {
     const data = await TinNhanService.getConversation(partnerId);
-    // Avoid re-rendering if messages are exactly the same (simple length check for polling)
     if (
       messages.value.length !== data.length ||
       messages.value[messages.value.length - 1]?.tinnhan_id !==
@@ -56,7 +58,6 @@ const fetchMessages = async (partnerId: number) => {
       messages.value = data;
       scrollToBottom();
 
-      // Mark unread messages as read
       const unreadMessages = data.filter(
         (m) => m.nguoi_nhan_id === currentUserId.value && !m.da_doc,
       );
@@ -64,7 +65,6 @@ const fetchMessages = async (partnerId: number) => {
         await TinNhanService.markAsRead(msg.tinnhan_id);
       }
 
-      // Refresh conversations to clear badges
       if (unreadMessages.length > 0) {
         fetchConversations();
       }
@@ -74,10 +74,81 @@ const fetchMessages = async (partnerId: number) => {
   }
 };
 
-const searchPhone = ref("");
-const searchResult = ref<any>(null);
+// Search & Partner Detail State
+const searchQuery = ref("");
+const searchResults = ref<any[]>([]);
 const searchHistory = ref<any[]>([]);
 const showSearchDropdown = ref(false);
+const isSearching = ref(false);
+const searchFilter = ref<"all" | "nong_dan" | "doanh_nghiep">("all");
+
+const showDetailModal = ref(false);
+const selectedDetailUserId = ref<number | null>(null);
+const selectedDetailUser = ref<any>(null);
+
+let debounceTimer: any = null;
+
+const openDetailModal = (userOrId: any, event?: Event) => {
+  if (event) event.stopPropagation();
+  if (typeof userOrId === "object" && userOrId !== null) {
+    selectedDetailUser.value = userOrId;
+    selectedDetailUserId.value = userOrId.user_id || userOrId.id;
+  } else {
+    selectedDetailUserId.value = Number(userOrId);
+    const foundInConv = conversations.value.find((c) => c.partnerId === selectedDetailUserId.value)?.partner;
+    const foundInSearch = searchResults.value.find((u) => u.user_id === selectedDetailUserId.value);
+    const foundInHist = searchHistory.value.find((u) => u.user_id === selectedDetailUserId.value);
+    selectedDetailUser.value = foundInSearch || foundInConv || foundInHist || null;
+  }
+  showDetailModal.value = true;
+};
+
+const handleSearchInput = () => {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  const q = searchQuery.value.trim();
+  if (!q) {
+    searchResults.value = [];
+    isSearching.value = false;
+    return;
+  }
+  isSearching.value = true;
+  debounceTimer = setTimeout(() => {
+    performSearch();
+  }, 300);
+};
+
+const performSearch = async () => {
+  const q = searchQuery.value.trim();
+  if (!q) {
+    searchResults.value = [];
+    isSearching.value = false;
+    return;
+  }
+  isSearching.value = true;
+  try {
+    const data = await TinNhanService.searchUsers(q);
+    searchResults.value = Array.isArray(data) ? data : [];
+    showSearchDropdown.value = true;
+  } catch (err: any) {
+    searchResults.value = [];
+  } finally {
+    isSearching.value = false;
+  }
+};
+
+const filteredSearchResults = computed(() => {
+  if (searchFilter.value === "all") return searchResults.value;
+  return searchResults.value.filter((user) => {
+    const roleName = user.vaiTro?.ten_vai_tro;
+    if (searchFilter.value === "nong_dan") {
+      return roleName === "nong_dan" || !!user.nongDan;
+    }
+    if (searchFilter.value === "doanh_nghiep") {
+      return roleName === "doanh_nghiep" || !!user.doanhNghiep;
+    }
+    return true;
+  });
+});
 
 const loadSearchHistory = () => {
   const h = localStorage.getItem("chatSearchHistory");
@@ -88,33 +159,29 @@ const loadSearchHistory = () => {
   }
 };
 
-const handleSearchPhone = async () => {
-  if (!searchPhone.value.trim()) return;
-  try {
-    const user = await TinNhanService.searchUserByPhone(
-      searchPhone.value.trim(),
-    );
-    searchResult.value = { ...user, phone: searchPhone.value.trim() };
-    showSearchDropdown.value = true;
-  } catch (err: any) {
-    searchResult.value = null;
-    notify.error("Không tìm thấy người dùng với SĐT này");
-  }
-};
-
 const handleSelectSearchUser = async (user: any) => {
-  // Add to history
+  const userEntry = {
+    user_id: user.user_id,
+    full_name: user.full_name,
+    avatar_url: user.avatar_url,
+    phone: user.phone || user.nongDan?.so_dien_thoai || user.doanhNghiep?.so_dien_thoai,
+    email: user.email || user.nongDan?.email_lien_he || user.doanhNghiep?.email_lien_he,
+    tinh_thanh: user.nongDan?.tinh_thanh || user.doanhNghiep?.tinh_thanh,
+    role_name: user.vaiTro?.ten_vai_tro,
+    ten_co_so: user.nongDan?.ten_co_so_kd || user.doanhNghiep?.ten_cong_ty,
+  };
+
   const newHistory = searchHistory.value.filter(
     (u) => u.user_id !== user.user_id,
   );
-  newHistory.unshift(user);
+  newHistory.unshift(userEntry);
   if (newHistory.length > 10) newHistory.pop();
   searchHistory.value = newHistory;
   localStorage.setItem("chatSearchHistory", JSON.stringify(newHistory));
 
   showSearchDropdown.value = false;
-  searchPhone.value = "";
-  searchResult.value = null;
+  searchQuery.value = "";
+  searchResults.value = [];
 
   await selectConversation(user.user_id);
   fetchConversations();
@@ -138,8 +205,15 @@ const selectConversation = async (partnerId: number) => {
   isLoadingMessages.value = true;
   await fetchMessages(partnerId);
   isLoadingMessages.value = false;
-  // Update URL without reloading
-  router.replace({ path: "/messages", query: { partnerId } });
+  // Update URL if different
+  if (route.query.partnerId !== String(partnerId)) {
+    router.replace({ path: "/messages", query: { partnerId } });
+  }
+};
+
+const handleBackToList = () => {
+  activePartnerId.value = null;
+  router.replace({ path: "/messages" });
 };
 
 const getAvatarUrl = (path: string | undefined | null) => {
@@ -210,8 +284,6 @@ const handleFileSelect = async (event: Event) => {
   }
 };
 
-import socketService from "@/service/socket";
-
 const activePartner = computed(() => {
   if (!activePartnerId.value) return null;
   return conversations.value.find((c) => c.partnerId === activePartnerId.value)
@@ -257,6 +329,33 @@ onMounted(async () => {
   window.addEventListener("click", handleGlobalClick);
 });
 
+watch(
+  () => route.query.partnerId,
+  async (newVal) => {
+    if (newVal) {
+      const pId = parseInt(newVal as string);
+      if (!isNaN(pId) && activePartnerId.value !== pId) {
+        activePartnerId.value = pId;
+        isLoadingMessages.value = true;
+        await fetchMessages(pId);
+        isLoadingMessages.value = false;
+      }
+    } else if (activePartnerId.value !== null) {
+      activePartnerId.value = null;
+    }
+  },
+);
+
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath !== "/messages") {
+      showDetailModal.value = false;
+      showSearchDropdown.value = false;
+    }
+  },
+);
+
 onUnmounted(() => {
   socketService.off("new_message", handleNewMessage);
   window.removeEventListener("click", handleGlobalClick);
@@ -264,10 +363,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-80px)] mt-20 max-w-7xl mx-auto px-4 pb-4">
-    <div
-      class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex h-full"
-    >
+  <div class="messages-page-root">
+    <div class="h-[calc(100vh-80px)] mt-20 max-w-7xl mx-auto px-4 pb-4">
+      <div
+        class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex h-full"
+      >
       <!-- ════════ LEFT PANE: CONVERSATIONS ════════ -->
       <div
         class="w-full md:w-80 lg:w-96 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50/50"
@@ -280,109 +380,237 @@ onUnmounted(() => {
           </p>
 
           <div class="mt-4 relative search-container">
-            <input
-              v-model="searchPhone"
-              @keyup.enter="handleSearchPhone"
-              @focus="showSearchDropdown = true"
-              type="text"
-              placeholder="Nhập SĐT để bắt đầu nhắn tin..."
-              class="w-full bg-slate-100 border-none rounded-full py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/30 focus:bg-white transition-colors"
-            />
-            <span
-              class="material-symbols-outlined absolute left-3.5 top-2.5 text-slate-400 text-[20px]"
-              >search</span
-            >
+            <div class="relative flex items-center">
+              <input
+                v-model="searchQuery"
+                @input="handleSearchInput"
+                @keyup.enter="performSearch"
+                @focus="showSearchDropdown = true"
+                type="text"
+                placeholder="Tìm tên, SĐT, email, tỉnh thành..."
+                class="w-full bg-slate-100 border-none rounded-full py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-[#2E7D32]/30 focus:bg-white transition-colors"
+              />
+              <span
+                class="material-symbols-outlined absolute left-3.5 text-slate-400 text-[20px] pointer-events-none"
+                >search</span
+              >
+              <button
+                v-if="searchQuery"
+                @click="searchQuery = ''; searchResults = []"
+                class="absolute right-3 text-slate-400 hover:text-slate-600 rounded-full w-5 h-5 flex items-center justify-center transition-colors"
+              >
+                <span class="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
 
             <!-- Search Dropdown -->
             <div
               v-if="
-                showSearchDropdown && (searchResult || searchHistory.length > 0)
+                showSearchDropdown && (searchQuery || searchHistory.length > 0)
               "
-              class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden"
+              class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 overflow-hidden"
             >
-              <!-- Search Result -->
-              <div v-if="searchResult">
-                <div
-                  class="px-4 py-2 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-500 uppercase tracking-wider"
+              <!-- Filter Tabs when query is typed -->
+              <div
+                v-if="searchQuery"
+                class="p-2 bg-slate-50 border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto text-xs"
+              >
+                <button
+                  @click="searchFilter = 'all'"
+                  class="px-3 py-1 rounded-full font-bold transition-all whitespace-nowrap"
+                  :class="searchFilter === 'all' ? 'bg-[#2E7D32] text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-200'"
                 >
-                  Kết quả tìm kiếm
-                </div>
-                <div
-                  @click="handleSelectSearchUser(searchResult)"
-                  class="p-3 hover:bg-[#f0f8e6] cursor-pointer flex items-center gap-3 transition-colors"
+                  Tất cả ({{ searchResults.length }})
+                </button>
+                <button
+                  @click="searchFilter = 'nong_dan'"
+                  class="px-3 py-1 rounded-full font-bold transition-all flex items-center gap-1 whitespace-nowrap"
+                  :class="searchFilter === 'nong_dan' ? 'bg-amber-500 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-200'"
                 >
-                  <div
-                    class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0"
-                  >
-                    <img
-                      v-if="searchResult.avatar_url"
-                      :src="getAvatarUrl(searchResult.avatar_url)"
-                      class="w-full h-full object-cover"
-                    />
-                    <div
-                      v-else
-                      class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold bg-[#E8F5E9]"
-                    >
-                      {{ searchResult.full_name.charAt(0).toUpperCase() }}
-                    </div>
-                  </div>
-                  <div>
-                    <div class="font-bold text-sm text-slate-800">
-                      {{ searchResult.full_name }}
-                    </div>
-                    <div class="text-xs text-slate-500">
-                      {{ searchResult.phone }}
-                    </div>
-                  </div>
-                </div>
+                  <span>🌾</span> Nông dân
+                </button>
+                <button
+                  @click="searchFilter = 'doanh_nghiep'"
+                  class="px-3 py-1 rounded-full font-bold transition-all flex items-center gap-1 whitespace-nowrap"
+                  :class="searchFilter === 'doanh_nghiep' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-200'"
+                >
+                  <span>🏢</span> Doanh nghiệp
+                </button>
               </div>
 
-              <!-- History -->
-              <div v-if="!searchResult && searchHistory.length > 0">
+              <!-- Loading state -->
+              <div v-if="isSearching" class="p-6 flex flex-col items-center justify-center gap-2 text-slate-400">
+                <span class="animate-spin border-2 border-slate-300 border-t-[#2E7D32] rounded-full w-6 h-6"></span>
+                <span class="text-xs">Đang tìm kiếm...</span>
+              </div>
+
+              <!-- Search Results List -->
+              <div
+                v-else-if="searchQuery && filteredSearchResults.length > 0"
+                class="max-h-[320px] overflow-y-auto custom-scrollbar divide-y divide-slate-100"
+              >
                 <div
-                  class="px-4 py-2 bg-slate-50 border-b border-slate-100 flex justify-between items-center"
+                  v-for="user in filteredSearchResults"
+                  :key="user.user_id"
+                  class="p-3 hover:bg-[#f0f8e6]/60 cursor-pointer flex items-center justify-between gap-3 transition-colors group"
+                  @click="handleSelectSearchUser(user)"
                 >
-                  <span
-                    class="text-xs font-bold text-slate-500 uppercase tracking-wider"
-                    >Lịch sử</span
-                  >
-                  <button
-                    @click="clearSearchHistory"
-                    class="text-xs text-[#2E7D32] hover:underline font-medium"
-                  >
-                    Xóa
-                  </button>
-                </div>
-                <div class="max-h-[250px] overflow-y-auto custom-scrollbar">
-                  <div
-                    v-for="(hist, idx) in searchHistory"
-                    :key="idx"
-                    @click="handleSelectSearchUser(hist)"
-                    class="p-3 hover:bg-slate-50 cursor-pointer flex items-center gap-3 transition-colors"
-                  >
-                    <div
-                      class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0"
-                    >
+                  <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <!-- Avatar -->
+                    <div class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 relative">
                       <img
-                        v-if="hist.avatar_url"
-                        :src="getAvatarUrl(hist.avatar_url)"
+                        v-if="user.avatar_url"
+                        :src="getAvatarUrl(user.avatar_url)"
                         class="w-full h-full object-cover"
                       />
                       <div
                         v-else
                         class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold bg-[#E8F5E9]"
                       >
-                        {{ hist.full_name.charAt(0).toUpperCase() }}
+                        {{ user.full_name.charAt(0).toUpperCase() }}
                       </div>
                     </div>
-                    <div>
-                      <div class="font-bold text-sm text-slate-800">
-                        {{ hist.full_name }}
+
+                    <!-- User Details -->
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-sm text-slate-800 truncate">
+                          {{ user.full_name }}
+                        </span>
+                        <!-- Role Badge -->
+                        <span
+                          v-if="user.vaiTro?.ten_vai_tro === 'nong_dan' || user.nongDan"
+                          class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 flex-shrink-0"
+                        >
+                          Nông dân
+                        </span>
+                        <span
+                          v-else-if="user.vaiTro?.ten_vai_tro === 'doanh_nghiep' || user.doanhNghiep"
+                          class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800 flex-shrink-0"
+                        >
+                          Doanh nghiệp
+                        </span>
                       </div>
-                      <div class="text-xs text-slate-500">
-                        {{ hist.phone || "SĐT" }}
+
+                      <!-- Business or facility sub-line -->
+                      <div
+                        v-if="user.nongDan?.ten_co_so_kd || user.doanhNghiep?.ten_cong_ty"
+                        class="text-xs font-semibold text-[#2E7D32] truncate"
+                      >
+                        {{ user.nongDan?.ten_co_so_kd || user.doanhNghiep?.ten_cong_ty }}
+                      </div>
+
+                      <!-- Phone, Email, Location metadata -->
+                      <div class="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                        <span v-if="user.phone || user.nongDan?.so_dien_thoai || user.doanhNghiep?.so_dien_thoai">
+                          📞 {{ user.phone || user.nongDan?.so_dien_thoai || user.doanhNghiep?.so_dien_thoai }}
+                        </span>
+                        <span v-if="user.nongDan?.tinh_thanh || user.doanhNghiep?.tinh_thanh">
+                          📍 {{ user.nongDan?.tinh_thanh || user.doanhNghiep?.tinh_thanh }}
+                        </span>
+                        <span
+                          v-if="!user.nongDan?.tinh_thanh && !user.doanhNghiep?.tinh_thanh && (user.email || user.nongDan?.email_lien_he || user.doanhNghiep?.email_lien_he)"
+                          class="truncate max-w-[140px]"
+                        >
+                          ✉️ {{ user.email || user.nongDan?.email_lien_he || user.doanhNghiep?.email_lien_he }}
+                        </span>
                       </div>
                     </div>
+                  </div>
+
+                  <!-- Quick actions: Detail modal button -->
+                  <div class="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      @click.stop="openDetailModal(user, $event)"
+                      class="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-[#2E7D32] hover:text-[#2E7D32] text-slate-600 text-xs font-semibold flex items-center gap-1 shadow-sm transition-all"
+                      title="Xem thông tin chi tiết"
+                    >
+                      <span class="material-symbols-outlined text-[16px]">visibility</span>
+                      <span class="hidden sm:inline">Chi tiết</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty result -->
+              <div
+                v-else-if="searchQuery && filteredSearchResults.length === 0"
+                class="p-6 text-center text-slate-400 text-xs"
+              >
+                <span class="material-symbols-outlined text-3xl mb-1 text-slate-300 block">search_off</span>
+                Không tìm thấy nông dân hoặc doanh nghiệp phù hợp với "{{ searchQuery }}"
+              </div>
+
+              <!-- History -->
+              <div v-else-if="!searchQuery && searchHistory.length > 0">
+                <div
+                  class="px-4 py-2 bg-slate-50 border-b border-slate-100 flex justify-between items-center"
+                >
+                  <span
+                    class="text-xs font-bold text-slate-500 uppercase tracking-wider"
+                    >Lịch sử tìm kiếm</span
+                  >
+                  <button
+                    @click="clearSearchHistory"
+                    class="text-xs text-[#2E7D32] hover:underline font-medium"
+                  >
+                    Xóa tất cả
+                  </button>
+                </div>
+                <div class="max-h-[250px] overflow-y-auto custom-scrollbar divide-y divide-slate-50">
+                  <div
+                    v-for="(hist, idx) in searchHistory"
+                    :key="idx"
+                    @click="handleSelectSearchUser(hist)"
+                    class="p-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div class="flex items-center gap-3 min-w-0 flex-1">
+                      <div
+                        class="w-10 h-10 rounded-full bg-slate-200 overflow-hidden flex-shrink-0"
+                      >
+                        <img
+                          v-if="hist.avatar_url"
+                          :src="getAvatarUrl(hist.avatar_url)"
+                          class="w-full h-full object-cover"
+                        />
+                        <div
+                          v-else
+                          class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold bg-[#E8F5E9]"
+                        >
+                          {{ hist.full_name.charAt(0).toUpperCase() }}
+                        </div>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="font-bold text-sm text-slate-800 truncate">
+                            {{ hist.full_name }}
+                          </span>
+                          <span
+                            v-if="hist.role_name === 'nong_dan'"
+                            class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800"
+                          >
+                            Nông dân
+                          </span>
+                          <span
+                            v-else-if="hist.role_name === 'doanh_nghiep'"
+                            class="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800"
+                          >
+                            Doanh nghiệp
+                          </span>
+                        </div>
+                        <div class="text-xs text-slate-500 truncate">
+                          {{ [hist.phone, hist.tinh_thanh].filter(Boolean).join(" • ") || "Chưa có thông tin" }}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      @click.stop="openDetailModal(hist, $event)"
+                      class="p-1.5 text-slate-400 hover:text-[#2E7D32] rounded-lg hover:bg-slate-100"
+                      title="Xem thông tin chi tiết"
+                    >
+                      <span class="material-symbols-outlined text-[18px]">info</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -529,45 +757,69 @@ onUnmounted(() => {
         <template v-if="activePartnerId">
           <!-- Chat Header -->
           <div
-            class="px-6 py-4 border-b border-slate-100 flex items-center gap-4 bg-white/80 backdrop-blur-md shadow-sm z-10 sticky top-0"
+            class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-md shadow-sm z-10 sticky top-0"
           >
-            <!-- Mobile back button -->
-            <button
-              @click="activePartnerId = null"
-              class="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
-            >
-              <span class="material-symbols-outlined">arrow_back</span>
-            </button>
-
-            <!-- Partner Info -->
-            <div
-              class="w-11 h-11 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative"
-            >
-              <img
-                v-if="activePartner?.avatar_url"
-                :src="getAvatarUrl(activePartner.avatar_url)"
-                class="w-full h-full object-cover"
-              />
-              <div
-                v-else
-                class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold text-lg bg-[#E8F5E9]"
+            <div class="flex items-center gap-4 min-w-0">
+              <!-- Mobile back button -->
+              <button
+                @click="handleBackToList"
+                class="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
               >
-                {{ activePartner?.full_name?.charAt(0).toUpperCase() || "?" }}
+                <span class="material-symbols-outlined">arrow_back</span>
+              </button>
+
+              <!-- Partner Info -->
+              <div
+                @click="activePartnerId && openDetailModal(activePartnerId)"
+                class="w-11 h-11 rounded-full bg-slate-200 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm relative cursor-pointer hover:ring-2 hover:ring-[#2E7D32]/50 transition-all"
+                title="Nhấp để xem thông tin chi tiết đối tác"
+              >
+                <img
+                  v-if="activePartner?.avatar_url"
+                  :src="getAvatarUrl(activePartner.avatar_url)"
+                  class="w-full h-full object-cover"
+                />
+                <div
+                  v-else
+                  class="w-full h-full flex items-center justify-center text-[#2E7D32] font-bold text-lg bg-[#E8F5E9]"
+                >
+                  {{ activePartner?.full_name?.charAt(0).toUpperCase() || "?" }}
+                </div>
+              </div>
+
+              <div
+                @click="activePartnerId && openDetailModal(activePartnerId)"
+                class="cursor-pointer group min-w-0"
+                title="Nhấp để xem thông tin chi tiết đối tác"
+              >
+                <div class="flex items-center gap-1.5">
+                  <h3 class="font-bold text-slate-800 text-lg leading-tight group-hover:text-[#2E7D32] transition-colors truncate">
+                    {{ activePartner?.full_name || "Đang tải..." }}
+                  </h3>
+                  <span class="material-symbols-outlined text-slate-400 group-hover:text-[#2E7D32] text-[18px]">
+                    info
+                  </span>
+                </div>
+                <p
+                  class="text-xs text-green-600 font-medium flex items-center gap-1.5 mt-0.5"
+                >
+                  <span
+                    class="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"
+                  ></span>
+                  Đang hoạt động
+                </p>
               </div>
             </div>
-            <div>
-              <h3 class="font-bold text-slate-800 text-lg leading-tight">
-                {{ activePartner?.full_name || "Đang tải..." }}
-              </h3>
-              <p
-                class="text-xs text-green-600 font-medium flex items-center gap-1.5 mt-0.5"
-              >
-                <span
-                  class="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse"
-                ></span>
-                Đang hoạt động
-              </p>
-            </div>
+
+            <!-- Header Right Action -->
+            <button
+              v-if="activePartnerId"
+              @click="openDetailModal(activePartnerId)"
+              class="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-[#2E7D32] hover:bg-[#f0f8e6] text-slate-700 hover:text-[#2E7D32] text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm flex-shrink-0"
+            >
+              <span class="material-symbols-outlined text-[17px] text-[#2E7D32]">badge</span>
+              <span class="hidden sm:inline">Xem hồ sơ</span>
+            </button>
           </div>
 
           <!-- Messages Area -->
@@ -765,6 +1017,21 @@ onUnmounted(() => {
         </template>
       </div>
     </div>
+  </div>
+
+    <!-- Partner Profile Detail Modal -->
+    <PartnerDetailModal
+      :show="showDetailModal"
+      :user-id="selectedDetailUserId"
+      :user-data="selectedDetailUser"
+      @close="showDetailModal = false"
+      @start-chat="
+        (partnerId) => {
+          selectConversation(partnerId);
+          fetchConversations();
+        }
+      "
+    />
   </div>
 </template>
 

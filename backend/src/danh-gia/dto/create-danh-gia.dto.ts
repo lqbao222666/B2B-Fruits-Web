@@ -15,10 +15,15 @@ export class CreateDanhGiaDto {
   @IsNumber()
   donhang_id: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  baidang_id: number;
+  baidang_id?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  nhucau_id?: number;
 
   @IsNotEmpty()
   @Type(() => Number)

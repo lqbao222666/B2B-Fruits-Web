@@ -640,11 +640,21 @@ onMounted(async () => {
           class="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 text-xs"
         >
           <!-- Chọn từ kho đã lưu -->
-          <div v-if="savedLocations.length > 0">
-            <label class="block font-bold text-slate-700 mb-1"
-              >Chọn từ kho / địa chỉ đã lưu:</label
-            >
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block font-bold text-slate-700"
+                >Chọn từ kho / địa chỉ đã lưu:</label
+              >
+              <router-link
+                to="/profile"
+                class="text-[11px] text-emerald-600 hover:underline font-bold flex items-center gap-1"
+              >
+                <span class="material-symbols-outlined text-xs">add_location_alt</span>
+                {{ savedLocations.length > 0 ? 'Quản lý kho' : '+ Thêm kho đã lưu' }}
+              </router-link>
+            </div>
             <select
+              v-if="savedLocations.length > 0"
               v-model="selectedSavedLocation"
               class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
             >
@@ -657,6 +667,9 @@ onMounted(async () => {
                 📍 {{ loc.ten_goi }} ({{ loc.dia_chi }})
               </option>
             </select>
+            <div v-else class="text-slate-400 italic text-xs py-1">
+              Chưa có kho nào được lưu. Bạn có thể bấm "+ Thêm kho đã lưu" để thêm trong Hồ sơ.
+            </div>
           </div>
 
           <!-- Tìm vị trí trên bản đồ -->

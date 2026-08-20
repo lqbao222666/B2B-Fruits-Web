@@ -26,10 +26,15 @@ export interface ChatResponse {
   reply: string;
   suggestions: SuggestionItem[];
   action_hint: 'tin_nhan' | 'xem_chi_tiet' | null;
+  search_type?: 'bai_dang' | 'nhu_cau' | 'both';
   detected_category?: { id: number; name: string };
   detected_province?: string;
+  detected_region?: string;
   detected_standard?: string;
   detected_price_range?: string;
+  detected_price_min?: number;
+  detected_price_max?: number;
+  detected_min_quantity?: number;
   detected_rating?: number;
 }
 
@@ -50,15 +55,55 @@ export class AiService {
     this.groq = new Groq({ apiKey: apiKey || '' });
   }
 
+  /**
+   * Helper gọi Groq API với danh sách mô hình hoạt động liên tục (fallback tự động)
+   */
+  private async createGroqCompletion(messages: any[], isJson: boolean = false): Promise<string | null> {
+    const activeModels = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it',
+    ];
+
+    for (const model of activeModels) {
+      try {
+        const completion = await this.groq.chat.completions.create({
+          model,
+          messages,
+          temperature: isJson ? 0.3 : 0.6,
+          max_tokens: isJson ? 800 : 1024,
+          ...(isJson ? { response_format: { type: 'json_object' } } : {}),
+        });
+
+        const content = completion.choices[0]?.message?.content?.trim();
+        if (content) {
+          this.logger.debug(`Thành công gọi Groq API với model: ${model}`);
+          return content;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Model Groq [${model}] chưa khả dụng: ${err?.message || err}. Đang thử model tiếp theo...`);
+      }
+    }
+
+    return null;
+  }
+
   async chat(dto: ChatDto): Promise<ChatResponse> {
     const { message, role_nguoi_dung, lich_su } = dto;
 
-    // 1. Phân tích câu hỏi để trích xuất từ khoá & địa điểm
-    const { tuKhoa, tinhThanh, tieuChuan, mucGia, danhGia } =
-      await this.contextService.extractKeywords(message);
-    this.logger.debug(
-      `Phân tích: tuKhoa="${tuKhoa}", tinhThanh="${tinhThanh}", tieuChuan="${tieuChuan}", mucGia="${mucGia}", danhGia="${danhGia}"`,
-    );
+    // 1. Phân tích câu hỏi để trích xuất từ khoá & tiêu chí địa điểm, miền, giá, số lượng
+    const {
+      tuKhoa,
+      tinhThanh,
+      mien,
+      tieuChuan,
+      mucGia,
+      giaMin,
+      giaMax,
+      soLuongMin,
+      danhGia,
+    } = await this.contextService.extractKeywords(message);
 
     // 2. Lấy dữ liệu thực từ DB dựa vào intent
     let baiDangs: any[] = [];
@@ -70,31 +115,91 @@ export class AiService {
       messageLower.includes('thu mua') ||
       messageLower.includes('doanh nghiệp') ||
       messageLower.includes('công ty') ||
-      messageLower.includes('thu mua');
+      messageLower.includes('cần mua') ||
+      messageLower.includes('nhu cầu') ||
+      messageLower.includes('cần gì') ||
+      messageLower.includes('thu mua gì') ||
+      messageLower.includes('ai cần');
 
     const isHoiVeBan =
       messageLower.includes('bán') ||
       messageLower.includes('cung cấp') ||
       messageLower.includes('nông dân') ||
       messageLower.includes('nguồn hàng') ||
-      messageLower.includes('có hàng');
+      messageLower.includes('có hàng') ||
+      messageLower.includes('trái cây') ||
+      messageLower.includes('hoa quả') ||
+      messageLower.includes('nông sản') ||
+      messageLower.includes('sản phẩm') ||
+      messageLower.includes('có gì') ||
+      messageLower.includes('trồng gì') ||
+      messageLower.includes('trồng');
 
-    // Nếu là nông dân → ưu tiên tìm nhu cầu thu mua
-    // Nếu là doanh nghiệp → ưu tiên tìm bài đăng bán
-    // Nếu không rõ → tìm cả hai
-    if (role_nguoi_dung === 'nong_dan' || isHoiVeMuaBan) {
-      nhuCaus = await this.contextService.timDoanhNghiep(tuKhoa, tinhThanh);
+    // Kiểm tra xem câu hỏi có liên quan đến nông sản/sàn giao dịch không
+    const hasSearchCriteria = !!(
+      tuKhoa || tinhThanh || mien || tieuChuan || mucGia ||
+      giaMin !== undefined || giaMax !== undefined ||
+      soLuongMin !== undefined || danhGia !== undefined
+    );
+    const hasAgriIntent = isHoiVeBan || isHoiVeMuaBan || hasSearchCriteria;
+
+    // CHỈ query DB khi có intent nông sản hoặc có tiêu chí tìm kiếm
+    if (hasAgriIntent) {
+      if (role_nguoi_dung === 'nong_dan' || isHoiVeMuaBan) {
+        nhuCaus = await this.contextService.timDoanhNghiep(
+          tuKhoa,
+          tinhThanh,
+          undefined,
+          tieuChuan,
+          mien,
+          soLuongMin,
+          giaMin,
+          giaMax,
+        );
+      }
+      if (role_nguoi_dung === 'doanh_nghiep' || isHoiVeBan || (!role_nguoi_dung && hasSearchCriteria)) {
+        baiDangs = await this.contextService.timSanPham(
+          tuKhoa,
+          tinhThanh,
+          undefined,
+          tieuChuan,
+          mucGia,
+          danhGia,
+          mien,
+          soLuongMin,
+          giaMin,
+          giaMax,
+        );
+      }
+      // Fallback: tìm cả hai nếu chưa có dữ liệu đủ
+      if (baiDangs.length === 0 && nhuCaus.length === 0) {
+        [baiDangs, nhuCaus] = await Promise.all([
+          this.contextService.timSanPham(
+            tuKhoa,
+            tinhThanh,
+            undefined,
+            tieuChuan,
+            mucGia,
+            danhGia,
+            mien,
+            soLuongMin,
+            giaMin,
+            giaMax,
+          ),
+          this.contextService.timDoanhNghiep(
+            tuKhoa,
+            tinhThanh,
+            undefined,
+            tieuChuan,
+            mien,
+            soLuongMin,
+            giaMin,
+            giaMax,
+          ),
+        ]);
+      }
     }
-    if (role_nguoi_dung === 'doanh_nghiep' || isHoiVeBan || !role_nguoi_dung) {
-      baiDangs = await this.contextService.timSanPham(tuKhoa, tinhThanh);
-    }
-    // Fallback: tìm cả hai nếu không đủ dữ liệu
-    if (baiDangs.length === 0 && nhuCaus.length === 0) {
-      [baiDangs, nhuCaus] = await Promise.all([
-        this.contextService.timSanPham(tuKhoa, tinhThanh),
-        this.contextService.timDoanhNghiep(tuKhoa, tinhThanh),
-      ]);
-    }
+    // Nếu không có intent nông sản → bỏ qua DB, để AI tự xử lý (gợi ý chuyển hướng)
 
     // 3. Xây dựng prompt
     const systemPrompt = this.promptService.buildSystemPrompt(role_nguoi_dung);
@@ -106,7 +211,7 @@ export class AiService {
       nhuCaus.length > 0 ? this.promptService.formatNhuCauContext(nhuCaus) : '';
     const contextData =
       [baiDangCtx, nhuCauCtx].filter(Boolean).join('\n\n') ||
-      '[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu phù hợp trong hệ thống hiện tại.';
+      '[DỮ LIỆU HỆ THỐNG]: Không có dữ liệu phù hợp với tiêu chí tìm kiếm trong hệ thống hiện tại.';
 
     const messages = this.promptService.buildMessages(
       systemPrompt,
@@ -115,23 +220,16 @@ export class AiService {
       lich_su,
     );
 
-    // 4. Gọi Groq API
-    let reply = '';
-    try {
-      const completion = await this.groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages,
-        temperature: 0.6,
-        max_tokens: 1024,
-      });
-      reply =
-        completion.choices[0]?.message?.content ??
-        'Xin lỗi, tôi không thể xử lý yêu cầu này.';
-    } catch (error: any) {
-      this.logger.error('Lỗi khi gọi Groq API:', error?.message);
-      throw new InternalServerErrorException(
-        'Không thể kết nối đến dịch vụ AI. Vui lòng thử lại sau.',
-      );
+    // 4. Gọi Groq API tự động với fallback
+    let reply = await this.createGroqCompletion(messages, false);
+
+    if (!reply) {
+      // Rule-based Fallback nếu gọi Groq không khả dụng
+      if (baiDangs.length > 0 || nhuCaus.length > 0) {
+        reply = `Dưới đây là các kết quả tìm kiếm nông sản và nhu cầu thu mua phù hợp với yêu cầu "${message}" của bạn:`;
+      } else {
+        reply = `Xin chào! Hệ thống đã ghi nhận câu hỏi của bạn. Hiện tại hệ thống chưa tìm thấy nông sản hoặc doanh nghiệp khớp đúng tiêu chí "${message}". Bạn có thể xem thêm danh sách các mặt hàng đang bán hoặc đăng nhu cầu mới trên sàn nhé!`;
+      }
     }
 
     // 5. Xây dựng suggestions từ dữ liệu DB
@@ -148,7 +246,7 @@ export class AiService {
           : 'Liên hệ để biết giá',
         dia_chi: `${bd.tinh_thanh}${bd.dia_chi_lay_hang ? ', ' + bd.dia_chi_lay_hang : ''}`,
         lien_he: nguoiDang
-          ? `${nguoiDang.full_name} — ${nguoiDang.phone || nguoiDang.email || 'N/A'}`
+          ? `${nguoiDang.full_name} — SĐT: ${nguoiDang.phone || nguoiDang.email || 'N/A'}`
           : 'Liên hệ qua hệ thống',
         danhmuc_id: bd.danhmuc_id,
         ten_danh_muc: bd.danhMuc?.ten_danh_muc,
@@ -166,14 +264,14 @@ export class AiService {
           : 'Thương lượng',
         dia_chi: nc.tinh_thanh_giao || 'Toàn quốc',
         lien_he: dn?.user
-          ? `${dn.user.full_name} — ${dn.ten_cong_ty} — ${dn.user.phone || 'N/A'}`
+          ? `${dn.user.full_name} — ${dn.ten_cong_ty || ''} — SĐT: ${dn.user.phone || 'N/A'}`
           : 'Liên hệ qua hệ thống',
         danhmuc_id: nc.danhmuc_id,
         ten_danh_muc: nc.danhMuc?.ten_danh_muc,
       });
     }
 
-    // 6. Xác định action_hint
+    // 6. Xác định action_hint & detected parameters
     let action_hint: ChatResponse['action_hint'] = null;
     if (suggestions.length > 0) {
       action_hint = 'xem_chi_tiet';
@@ -198,14 +296,29 @@ export class AiService {
       };
     }
 
+    // Determine search_type for frontend quick-links
+    let search_type: ChatResponse['search_type'] = undefined;
+    if (baiDangs.length > 0 && nhuCaus.length > 0) {
+      search_type = 'both';
+    } else if (baiDangs.length > 0) {
+      search_type = 'bai_dang';
+    } else if (nhuCaus.length > 0) {
+      search_type = 'nhu_cau';
+    }
+
     return {
       reply,
       suggestions,
       action_hint,
+      search_type,
       detected_category,
-      detected_province: tinhThanh,
+      detected_province: Array.isArray(tinhThanh) ? tinhThanh.join(', ') : tinhThanh,
+      detected_region: mien,
       detected_standard: tieuChuan,
       detected_price_range: mucGia,
+      detected_price_min: giaMin,
+      detected_price_max: giaMax,
+      detected_min_quantity: soLuongMin,
       detected_rating: danhGia,
     };
   }
@@ -215,16 +328,12 @@ export class AiService {
   ): Promise<{ tieu_de?: string; gia_per_kg?: number; mo_ta?: string }> {
     const { tieu_de, ten_nong_san, so_luong_co, don_vi_tinh, tinh_thanh } = dto;
 
-    const systemPrompt = `Bạn là một chuyên gia marketing nông sản. Nhiệm vụ của bạn là tối ưu hóa và gợi ý các thông tin hấp dẫn nhất cho một bài đăng bán nông sản trên sàn thương mại điện tử B2B.
+    const systemPrompt = `Bạn là một chuyên gia marketing nông sản B2B. Nhiệm vụ của bạn là tạo tiêu đề và mô tả hấp dẫn nhất cho bài đăng bán nông sản.
 Bạn phải trả về DUY NHẤT một chuỗi định dạng JSON hợp lệ với cấu trúc sau, tuyệt đối không có bất kỳ văn bản nào khác bên ngoài JSON:
 {
   "tieu_de": "Tiêu đề thật giật tít, hấp dẫn, ngắn gọn nhưng đầy đủ ý (tối đa 15 từ)",
   "mo_ta": "Đoạn mô tả chi tiết khoảng 150-250 từ..."
-}
-
-Lưu ý:
-- "tieu_de": Phải tạo một tiêu đề thu hút sự chú ý của doanh nghiệp mua sỉ.
-- "mo_ta": Nêu bật chất lượng, xuất xứ, quy trình trồng trọt (giả định VietGAP/sạch), khuyến khích liên hệ mua sỉ. Dùng gạch đầu dòng cho dễ đọc.`;
+}`;
 
     const userPrompt = `Hãy viết thông tin cho sản phẩm sau:
 - Tên nông sản: ${ten_nong_san}
@@ -234,103 +343,135 @@ Lưu ý:
 `;
 
     try {
-      const completion = await this.groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
+      const replyContent = await this.createGroqCompletion(
+        [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: 800,
-        response_format: { type: 'json_object' },
-      });
+        true,
+      );
 
-      const replyContent =
-        completion.choices[0]?.message?.content?.trim() ?? '{}';
-
-      let parsed: any = {};
-      try {
-        parsed = JSON.parse(replyContent);
-      } catch (e) {
-        const startIndex = replyContent.indexOf('{');
-        const endIndex = replyContent.lastIndexOf('}');
-        if (startIndex !== -1 && endIndex !== -1) {
-          parsed = JSON.parse(replyContent.substring(startIndex, endIndex + 1));
-        } else {
-          throw e;
+      if (replyContent) {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(replyContent);
+        } catch (e) {
+          const startIndex = replyContent.indexOf('{');
+          const endIndex = replyContent.lastIndexOf('}');
+          if (startIndex !== -1 && endIndex !== -1) {
+            parsed = JSON.parse(replyContent.substring(startIndex, endIndex + 1));
+          }
+        }
+        if (parsed.tieu_de || parsed.mo_ta) {
+          return {
+            tieu_de: parsed.tieu_de,
+            mo_ta: parsed.mo_ta,
+          };
         }
       }
-
-      return {
-        tieu_de: parsed.tieu_de,
-        mo_ta: parsed.mo_ta,
-      };
     } catch (error: any) {
-      this.logger.error(
-        'Lỗi khi gọi Groq API để gợi ý bài đăng:',
-        error?.message,
-      );
-      throw new InternalServerErrorException(
-        'Không thể kết nối đến dịch vụ AI để tạo gợi ý. Vui lòng thử lại sau.',
-      );
+      this.logger.error('Lỗi khi gọi Groq AI gợi ý bài đăng:', error?.message);
     }
+
+    // Fallback thông minh nếu Groq không phản hồi
+    const fallbackTitle = `${ten_nong_san} tươi ngon VietGAP giá sỉ từ ${tinh_thanh || 'nhà vườn'}`;
+    const fallbackDesc = `${ten_nong_san} chất lượng cao được trồng và chăm sóc theo quy trình VietGAP an toàn tại ${tinh_thanh || 'nhà vườn'}.\n\nSản lượng hiện có: ${so_luong_co || 1000} ${don_vi_tinh || 'kg'}.\n\nĐiểm nổi bật của sản phẩm:\n- Trái mọng tươi ngon, hương vị tự nhiên đậm đà\n- Quy trình trồng sạch, đảm bảo an toàn vệ sinh thực phẩm\n- Giá cạnh tranh trực tiếp tại vườn cho doanh nghiệp mua sỉ\n- Hỗ trợ đóng gói và vận chuyển giao hàng tận nơi\n\nQuý doanh nghiệp và thương lái có nhu cầu mua sỉ vui lòng liên hệ trực tiếp để nhận báo giá tốt nhất!`;
+
+    return {
+      tieu_de: fallbackTitle,
+      mo_ta: fallbackDesc,
+    };
   }
 
-  async suggestPrice(dto: SuggestPriceDto): Promise<{ gia_goi_y: number }> {
+  async suggestPrice(dto: SuggestPriceDto): Promise<{ gia_goi_y: number; khoang_gia: string }> {
     const { ten_nong_san, don_vi_tinh, tinh_thanh } = dto;
 
     const systemPrompt = `Bạn là một chuyên gia thẩm định giá nông sản tại Việt Nam.
-Bạn phải trả về DUY NHẤT một chuỗi định dạng JSON hợp lệ với cấu trúc sau, tuyệt đối không có bất kỳ văn bản nào khác:
+Bạn phải dự báo giá sỉ dựa trên tình hình thị trường gần đây. Chú ý đến phân loại sản phẩm (Loại 1, Loại 2, Loại 3,...) được cung cấp. Loại chất lượng tốt hơn (như Loại 1) phải có giá cao hơn so với Loại 2, Loại 3.
+Bạn phải trả về DUY NHẤT một chuỗi định dạng JSON hợp lệ với cấu trúc sau, tuyệt đối không có văn bản nào khác:
 {
-  "gia_goi_y": 15000
-}
+  "gia_goi_y": <một số nguyên biểu diễn giá sỉ gợi ý tốt nhất cho loại này, ví dụ: 45000>,
+  "khoang_gia": "<chuỗi mô tả khoảng giá sỉ dự báo, ví dụ: '40.000 - 50.000 VNĐ'>"
+}`;
 
-Lưu ý:
-- "gia_goi_y": BẮT BUỘC dự đoán một mức giá bán buôn hợp lý (bằng số nguyên, ví dụ: 25000, 45000) cho 1 ${don_vi_tinh || 'kg'} nông sản này ở thị trường Việt Nam, đặc biệt là tại ${tinh_thanh}.
-- Cân nhắc giá cả thị trường sỉ hiện tại của loại nông sản này.
-- TUYỆT ĐỐI KHÔNG để trống, nếu không có dữ liệu thực tế, hãy đưa ra một con số trung bình ước chừng.`;
-
-    const userPrompt = `Gợi ý giá sỉ cho:
-- Nông sản: ${ten_nong_san}
-- Khu vực: ${tinh_thanh}
-- Đơn vị tính: 1 ${don_vi_tinh || 'kg'}`;
+    const userPrompt = `Dự báo và gợi ý giá sỉ cho 1 ${don_vi_tinh || 'kg'} nông sản: ${ten_nong_san} tại ${tinh_thanh || 'Việt Nam'}`;
 
     try {
-      const completion = await this.groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
+      const replyContent = await this.createGroqCompletion(
+        [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.3,
-        max_tokens: 100,
-        response_format: { type: 'json_object' },
-      });
+        true,
+      );
 
-      const replyContent =
-        completion.choices[0]?.message?.content?.trim() ?? '{}';
-
-      let parsed: any = {};
-      try {
-        parsed = JSON.parse(replyContent);
-      } catch (e) {
-        const startIndex = replyContent.indexOf('{');
-        const endIndex = replyContent.lastIndexOf('}');
-        if (startIndex !== -1 && endIndex !== -1) {
-          parsed = JSON.parse(replyContent.substring(startIndex, endIndex + 1));
-        } else {
-          throw e;
+      if (replyContent) {
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(replyContent);
+        } catch (e) {
+          const startIndex = replyContent.indexOf('{');
+          const endIndex = replyContent.lastIndexOf('}');
+          if (startIndex !== -1 && endIndex !== -1) {
+            parsed = JSON.parse(replyContent.substring(startIndex, endIndex + 1));
+          }
+        }
+        if (parsed.gia_goi_y && !isNaN(Number(parsed.gia_goi_y))) {
+          return { 
+            gia_goi_y: Number(parsed.gia_goi_y),
+            khoang_gia: parsed.khoang_gia || ''
+          };
         }
       }
-
-      return {
-        gia_goi_y: parsed.gia_goi_y,
-      };
     } catch (error: any) {
-      this.logger.error('Lỗi khi gọi Groq API để gợi ý giá:', error?.message);
-      throw new InternalServerErrorException(
-        'Không thể lấy gợi ý giá từ AI lúc này.',
-      );
+      this.logger.error('Lỗi khi gọi Groq AI gợi ý giá:', error?.message);
     }
+
+    // Fallback thông minh dựa trên bảng giá thị trường thực tế
+    let basePricePerKg = 30000;
+    const text = (ten_nong_san || '').toLowerCase();
+
+    if (text.includes('sầu riêng')) basePricePerKg = 85000;
+    else if (text.includes('dâu tây')) basePricePerKg = 130000;
+    else if (text.includes('dừa sáp')) basePricePerKg = 150000;
+    else if (text.includes('cà phê')) basePricePerKg = 95000;
+    else if (text.includes('măng cụt')) basePricePerKg = 60000;
+    else if (text.includes('xoài')) basePricePerKg = 45000;
+    else if (text.includes('bưởi')) basePricePerKg = 42000;
+    else if (text.includes('bơ')) basePricePerKg = 40000;
+    else if (text.includes('vú sữa')) basePricePerKg = 50000;
+    else if (text.includes('chôm chôm')) basePricePerKg = 35000;
+    else if (text.includes('mận')) basePricePerKg = 55000;
+    else if (text.includes('vải')) basePricePerKg = 35000;
+    else if (text.includes('nhãn')) basePricePerKg = 38000;
+    else if (text.includes('cam')) basePricePerKg = 28000;
+    else if (text.includes('thanh long')) basePricePerKg = 25000;
+    else if (text.includes('ổi')) basePricePerKg = 18000;
+    else if (text.includes('thơm') || text.includes('dứa')) basePricePerKg = 15000;
+    else if (text.includes('dừa')) basePricePerKg = 15000;
+    else if (text.includes('chuối')) basePricePerKg = 12000;
+    else if (text.includes('dưa hấu')) basePricePerKg = 16000;
+
+    // Điều chỉnh giá theo phân loại (loại 1, 2, 3...)
+    let multiplier = 1;
+    if (text.includes('loại 1') || text.includes('loai 1') || text.includes('vip')) {
+      multiplier = 1.3;
+    } else if (text.includes('loại 2') || text.includes('loai 2')) {
+      multiplier = 1.0;
+    } else if (text.includes('loại 3') || text.includes('loai 3')) {
+      multiplier = 0.7;
+    }
+
+    basePricePerKg = Math.round((basePricePerKg * multiplier) / 1000) * 1000; // Làm tròn đến ngàn đồng
+
+    const finalPrice = don_vi_tinh === 'tấn' ? basePricePerKg * 1000 : basePricePerKg;
+    const khoangGiaMin = Math.round(finalPrice * 0.9 / 1000) * 1000;
+    const khoangGiaMax = Math.round(finalPrice * 1.1 / 1000) * 1000;
+    const khoangGiaStr = `${khoangGiaMin.toLocaleString('vi-VN')} - ${khoangGiaMax.toLocaleString('vi-VN')} VNĐ/${don_vi_tinh || 'kg'}`;
+
+    return {
+      gia_goi_y: finalPrice,
+      khoang_gia: khoangGiaStr
+    };
   }
 }

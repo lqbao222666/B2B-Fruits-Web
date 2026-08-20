@@ -2,7 +2,7 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { BaiDangRepository } from './bai-dang.repository';
 import { CreateBaiDangDto } from './dto/create-bai-dang.dto';
 import { UpdateBaiDangDto } from './dto/update-bai-dang.dto';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class BaiDangService implements OnModuleInit {

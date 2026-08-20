@@ -80,6 +80,13 @@ export class DonHangController {
     return this.donHangService.update(id, updateDto);
   }
 
+  @Patch(':id/xac-nhan-giao')
+  @Roles(Role.admin, Role.nong_dan)
+  nongDanXacNhanGiao(@Request() req: any, @Param('id', ParseIntPipe) id: number) {
+    const userId = Number(req.user.id || req.user.user_id || req.user.sub);
+    return this.donHangService.nongDanXacNhanGiao(id, userId);
+  }
+
   @Delete(':id')
   @Roles(Role.admin)
   remove(@Param('id', ParseIntPipe) id: number) {

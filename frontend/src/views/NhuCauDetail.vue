@@ -588,10 +588,10 @@ onMounted(() => {
     <!-- ===== MODAL GỬI BÁO GIÁ ===== -->
     <div
       v-if="showOfferModal && nhuCau"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+      class="fixed inset-0 z-[9999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fade-in"
     >
       <div
-        class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative border border-slate-100"
+        class="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative border border-slate-100 max-h-[82vh] overflow-y-auto my-auto"
       >
         <div
           class="flex items-center justify-between border-b border-slate-100 pb-4"

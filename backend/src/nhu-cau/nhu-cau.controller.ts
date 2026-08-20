@@ -37,12 +37,31 @@ export class NhuCauController {
     @Query('tinh_thanh_giao') tinh_thanh_giao?: string,
     @Query('danhmuc_id') danhmuc_id?: string,
     @Query('trang_thai') trang_thai?: string,
+    @Query('mien') mien?: string,
+    @Query('so_luong_min') so_luong_min?: string,
+    @Query('gia_min') gia_min?: string,
+    @Query('gia_max') gia_max?: string,
+    @Query('yeu_cau_chung_nhan') yeu_cau_chung_nhan?: string,
+    @Query('cho_thuong_luong') cho_thuong_luong?: string,
+    @Query('sort') sort?: string,
   ) {
     return this.service.findAll({
       ten_nong_san,
       tinh_thanh_giao,
       danhmuc_id: danhmuc_id ? parseInt(danhmuc_id, 10) : undefined,
       trang_thai,
+      mien,
+      so_luong_min: so_luong_min ? parseFloat(so_luong_min) : undefined,
+      gia_min: gia_min ? parseFloat(gia_min) : undefined,
+      gia_max: gia_max ? parseFloat(gia_max) : undefined,
+      yeu_cau_chung_nhan,
+      cho_thuong_luong:
+        cho_thuong_luong === 'true'
+          ? true
+          : cho_thuong_luong === 'false'
+            ? false
+            : undefined,
+      sort,
     });
   }
 

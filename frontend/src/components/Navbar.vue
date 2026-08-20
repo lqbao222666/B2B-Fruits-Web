@@ -454,6 +454,53 @@ const handleSearch = () => {
             <div class="action-sep"></div>
           </template>
 
+          <!-- DOANH NGHIỆP TOOLS -->
+          <template v-if="user?.role?.toUpperCase() === 'DOANH_NGHIEP'">
+            <RouterLink
+              to="/quan-ly-nhu-cau"
+              class="action-btn action-btn--farmer"
+            >
+              <div class="action-btn-icon">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+              </div>
+              <span class="action-btn-label text-[#2E7D32]">Quản lý nhu cầu</span>
+            </RouterLink>
+
+            <RouterLink
+              to="/create-nhu-cau"
+              class="action-btn action-btn--farmer-create"
+            >
+              <div class="action-btn-icon">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </div>
+              <span class="action-btn-label">Tạo nhu cầu</span>
+            </RouterLink>
+
+            <!-- Separator -->
+            <div class="action-sep"></div>
+          </template>
+
           <!-- User menu / Login -->
           <div v-if="user" class="relative user-menu-container">
             <button
@@ -898,6 +945,7 @@ const handleSearch = () => {
   border-radius: 12px;
   overflow: visible;
   height: 46px;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.95);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -994,6 +1042,7 @@ const handleSearch = () => {
   align-items: center;
   height: 44px;
   position: relative;
+  min-width: 0;
 }
 
 .search-input {
@@ -1005,6 +1054,7 @@ const handleSearch = () => {
   color: #263238;
   background: transparent;
   font-family: "Inter", sans-serif;
+  min-width: 0;
 }
 
 .search-input::placeholder {
@@ -1319,34 +1369,15 @@ const handleSearch = () => {
 }
 
 /* =================== RESPONSIVE =================== */
-@media (max-width: 768px) {
-  .topbar {
-    display: none;
-  }
-
-  .main-navbar-inner {
-    padding: 0 12px;
-    gap: 10px;
-    height: 60px;
-  }
-
+@media (max-width: 1300px) {
   .logo-sub {
     display: none;
   }
-
-  .logo-brand {
-    font-size: 17px;
-  }
-
-  .logo-icon {
-    width: 36px;
-    height: 36px;
-  }
-
+  
   .category-btn span:not(.chevron-icon) {
     display: none;
   }
-
+  
   .category-btn {
     padding: 0 10px;
   }
@@ -1362,6 +1393,27 @@ const handleSearch = () => {
   .user-name,
   .user-role {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    display: none;
+  }
+
+  .main-navbar-inner {
+    padding: 0 12px;
+    gap: 10px;
+    height: 60px;
+  }
+
+  .logo-brand {
+    font-size: 17px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
   }
 }
 

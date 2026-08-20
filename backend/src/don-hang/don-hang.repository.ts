@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateDonHangDto } from './dto/create-don-hang.dto';
 import { UpdateDonHangDto } from './dto/update-don-hang.dto';
 import { DatHangDto } from './dto/dat-hang.dto';
@@ -460,19 +460,38 @@ export class DonHangRepository {
           ? data.doanh_nghiep_da_tt_coc
           : existing.doanh_nghiep_da_tt_coc;
 
-      // Trừ số lượng Nhu Cầu Thu Mua khi Doanh nghiệp vừa thanh toán Cọc 15%
+      // Trừ số lượng sản phẩm trong Bài Đăng & Nhu Cầu Thu Mua khi Doanh nghiệp vừa thanh toán Cọc 15%
       if (
         data.doanh_nghiep_da_tt_coc === true &&
         !existing.doanh_nghiep_da_tt_coc
       ) {
+        const tongSoLuong = existing.chiTiets.reduce(
+          (sum: number, item: any) => sum + Number(item.so_luong),
+          0,
+        );
+
+        // 1. Trừ số lượng sản phẩm còn lại trên Bài Đăng
+        if (existing.baidang_id && tongSoLuong > 0) {
+          const baiDang = await this.prisma.baiDang.findUnique({
+            where: { baidang_id: existing.baidang_id },
+          });
+          if (baiDang) {
+            const newRemaining = Math.max(0, Number(baiDang.so_luong_con_lai) - tongSoLuong);
+            await this.prisma.baiDang.update({
+              where: { baidang_id: existing.baidang_id },
+              data: {
+                so_luong_con_lai: newRemaining,
+                trang_thai: newRemaining <= 0 ? 'da_ban' : baiDang.trang_thai,
+              },
+            });
+          }
+        }
+
+        // 2. Trừ số lượng Nhu Cầu Thu Mua (nếu có)
         if (existing.ghi_chu && existing.ghi_chu.includes('[NHUCAU_ID:')) {
           const match = existing.ghi_chu.match(/\[NHUCAU_ID:\s*(\d+)\]/);
           if (match && match[1]) {
             const nhucau_id = Number(match[1]);
-            const tongSoLuong = existing.chiTiets.reduce(
-              (sum: number, item: any) => sum + Number(item.so_luong),
-              0,
-            );
 
             const nhuCau = await this.prisma.nhuCauThuMua.findUnique({
               where: { nhucau_id },
@@ -494,21 +513,20 @@ export class DonHangRepository {
         }
       }
 
-      // Nếu Doanh nghiệp đã trả cọc 15%, đơn hàng tiến hành giao
+      // Nếu Doanh nghiệp đã trả cọc 15%, chuyển sang trạng thái chờ Nông dân xác nhận
       if (
         enterprisePaid &&
-        (existing.trang_thai_don === 'cho_xac_nhan' ||
-          existing.trang_thai_don === 'da_xac_nhan')
+        existing.trang_thai_don === 'cho_xac_nhan'
       ) {
-        data.trang_thai_don = 'dang_giao';
+        data.trang_thai_don = 'da_xac_nhan'; // DN đã cọc, chờ nông dân xác nhận đủ hàng
         data.trang_thai_tt = 'da_thanh_toan';
 
         await this.prisma.thongBao.create({
           data: {
             user_id: existing.nguoi_mua_id,
             loai: 'don_hang',
-            tieu_de: '🚚 Xe vận chuyển B2B đã được kích hoạt!',
-            noi_dung: `Doanh nghiệp đã hoàn tất thanh toán cọc 15%! Đội xe B2B đang tới địa chỉ Nông dân lấy hàng vận chuyển đến Doanh nghiệp.`,
+            tieu_de: '✅ Đã đặt cọc 15% thành công',
+            noi_dung: `Bạn đã thanh toán cọc thành công! Hệ thống đang chờ Nông dân xác nhận tình trạng lô hàng trước khi điều xe B2B.`,
             ref_id: donhang_id,
             ref_type: 'don_hang',
           },
@@ -517,14 +535,14 @@ export class DonHangRepository {
           data: {
             user_id: existing.nguoi_ban_id,
             loai: 'don_hang',
-            tieu_de: '🚚 Xe vận chuyển B2B đang tới lấy hàng!',
-            noi_dung: `Đơn hàng #${existing.ma_don_hang} đã hoàn tất đặt cọc! Xe B2B đang trên đường tới kho của bạn để nhận hàng.`,
+            tieu_de: '💰 Doanh nghiệp đã đặt cọc 15%!',
+            noi_dung: `Đơn hàng #${existing.ma_don_hang} đã được doanh nghiệp thanh toán cọc! Vui lòng kiểm tra lại hàng hóa và bấm "Xác nhận đủ điều kiện giao hàng" để hệ thống điều xe. Nếu có sự cố (thiếu hàng, hư hỏng...), vui lòng báo cáo ngay.`,
             ref_id: donhang_id,
             ref_type: 'don_hang',
           },
         });
 
-        // Gửi thông báo khẩn tới Admin để ĐIỀU XE B2B!
+        // Gửi thông báo tới Admin chờ điều xe
         const adminRole = await this.prisma.vaiTro.findFirst({
           where: { ten_vai_tro: 'admin' },
         });
@@ -537,8 +555,8 @@ export class DonHangRepository {
               data: {
                 user_id: admin.user_id,
                 loai: 'don_hang',
-                tieu_de: '🚨 Đơn B2B đủ điều kiện - CẦN ĐIỀU XE VẬN CHUYỂN!',
-                noi_dung: `Đơn hàng #${existing.ma_don_hang} đã cọc 15%. Admin vui lòng vào Quản lý Đơn hàng để ĐIỀU XE B2B đến kho Nông dân lấy hàng!`,
+                tieu_de: '🚨 Đơn hàng đã cọc - Đang chờ Nông dân xác nhận hàng hóa',
+                noi_dung: `Đơn hàng #${existing.ma_don_hang} đã cọc 15%. Vui lòng chờ Nông dân xác nhận đủ điều kiện hàng hóa để ĐIỀU XE B2B lấy hàng!`,
                 ref_id: donhang_id,
                 ref_type: 'don_hang',
               },
@@ -546,8 +564,6 @@ export class DonHangRepository {
           }
         }
       }
-
-      // Nếu Admin bấm xác nhận Xe B2B đã giao tới nơi
       if (
         data.trang_thai_don === 'da_giao_hang' &&
         existing.trang_thai_don !== 'da_giao_hang'
@@ -613,5 +629,52 @@ export class DonHangRepository {
         where: { donhang_id },
       });
     });
+  }
+
+  async nongDanXacNhanGiao(id: number, userId: number) {
+    const order = await this.prisma.donHang.findUnique({
+      where: { donhang_id: id },
+    });
+    if (!order) throw new Error('Đơn hàng không tồn tại');
+
+    const updated = await this.prisma.donHang.update({
+      where: { donhang_id: id },
+      data: {
+        nong_dan_xac_nhan_giao: true,
+        ngay_nong_dan_xac_nhan: new Date(),
+        trang_thai_don: 'dang_giao',
+      },
+    });
+
+    // Lấy các Admin trong hệ thống để gửi thông báo
+    const admins = await this.prisma.users.findMany({
+      where: { vaiTro: { ten_vai_tro: 'admin' } },
+    });
+
+    for (const admin of admins) {
+      await this.prisma.thongBao.create({
+        data: {
+          user_id: admin.user_id,
+          tieu_de: `🚚 Xe B2B bắt đầu giao đơn #${order.ma_don_hang}`,
+          noi_dung: `Nông dân đã kiểm tra vườn và xác nhận sẵn sàng giao hàng. Hệ thống đã tự động chuyển trạng thái đơn hàng sang "Đang giao".`,
+          loai: 'he_thong',
+          ref_id: id,
+          ref_type: 'don_hang',
+        },
+      });
+    }
+
+    await this.prisma.thongBao.create({
+      data: {
+        user_id: order.nguoi_mua_id,
+        tieu_de: `🚚 Xe vận chuyển B2B đang trên đường giao hàng!`,
+        noi_dung: `Nông dân đã xác nhận sản lượng & chất lượng sẵn sàng. Xe B2B đã bắt đầu thu gom và vận chuyển đơn #${order.ma_don_hang} đến Doanh nghiệp.`,
+        loai: 'don_hang',
+        ref_id: id,
+        ref_type: 'don_hang',
+      },
+    });
+
+    return updated;
   }
 }

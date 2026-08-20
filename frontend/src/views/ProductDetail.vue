@@ -26,8 +26,7 @@ const router = useRouter();
 const post = ref<any>(null);
 const loading = ref(true);
 const isCheckingOut = ref(false);
-const showPaymentModal = ref(false);
-const paymentStep = ref(0); // 0 = showing QR, 1 = success
+const pendingCheckoutItems = ref<any[]>([]);
 
 const userStr = localStorage.getItem("user");
 const user = userStr ? JSON.parse(userStr) : null;
@@ -441,14 +440,18 @@ const fetchData = async () => {
   }
 };
 
-const handleCheckout = () => {
+const showThuongLuongModal = ref(false);
+const giaDeXuat = ref<Record<number, number>>({});
+const ghiChuThuongLuong = ref("");
+
+const handleThuongLuong = () => {
   if (!user) {
-    notify.error("Vui lòng đăng nhập bằng tài khoản doanh nghiệp để mua hàng!");
+    notify.error("Vui lòng đăng nhập bằng tài khoản doanh nghiệp để thương lượng!");
     return;
   }
 
   if (user.role === "nong_dan" || user.role === "NONG_DAN") {
-    notify.error("Tài khoản nông dân không thể mua hàng!");
+    notify.error("Tài khoản nông dân không thể thương lượng mua hàng!");
     return;
   }
 
@@ -469,49 +472,46 @@ const handleCheckout = () => {
     return;
   }
 
-  showPaymentModal.value = true;
-  paymentStep.value = 0;
-
-  // Giả lập quét mã QR 3s
-  setTimeout(() => {
-    paymentStep.value = 1;
-    setTimeout(() => {
-      executeCheckout(selectedItems);
-    }, 1000);
-  }, 3000);
+  pendingCheckoutItems.value = selectedItems;
+  // Gợi ý giá đề xuất mặc định là giá của loại sản phẩm đang chọn
+  selectedItems.forEach((item: any) => {
+    giaDeXuat.value[item.phanloai_id] = Number(item.gia);
+  });
+  ghiChuThuongLuong.value = "";
+  showThuongLuongModal.value = true;
 };
 
-const executeCheckout = async (selectedItems: any[]) => {
+const executeThuongLuong = async () => {
   isCheckingOut.value = true;
   try {
-    const items = selectedItems.map((pl: any) => ({
-      phanloai_id: pl.phanloai_id,
-      so_luong: Number(phanLoaiQuantities.value[pl.phanloai_id]),
-    }));
-
-    await api.post("/don-hang/dat-hang", {
+    const payload = {
       baidang_id: post.value.baidang_id,
-      nguoi_ban_id: post.value.nguoi_dang_id,
-      items,
-      dia_chi_giao: searchLocationText.value || "Địa chỉ lấy từ bản đồ",
-      tinh_thanh_giao: "Cần Thơ",
+      doanh_nghiep_id: user.user_id || user.id,
+      don_vi: post.value.don_vi_tinh || 'kg',
+      items: pendingCheckoutItems.value.map((item: any) => ({
+        phanloai_id: item.phanloai_id,
+        so_luong_mua: Number(phanLoaiQuantities.value[item.phanloai_id]),
+        gia_de_xuat: Number(giaDeXuat.value[item.phanloai_id])
+      })),
+      ghi_chu: ghiChuThuongLuong.value,
       hinh_thuc_giao_hang: "giao_tan_noi",
-      khoang_cach: distanceKm.value,
-      phi_van_chuyen: shippingFee.value,
-      ghi_chu: "",
-    });
+      dia_chi_giao: searchLocationText.value || "Địa chỉ lấy từ bản đồ",
+      tinh_thanh_giao: "Cần Thơ", // TODO: lấy từ thông tin thật nếu cần
+    };
 
-    notify.success("Đặt hàng và thanh toán cọc thành công!");
-    showPaymentModal.value = false;
-    router.push("/orders");
+    await api.post("/thuong-luong", payload);
+
+    notify.success("Đã gửi yêu cầu thương lượng thành công!");
+    showThuongLuongModal.value = false;
+    router.push("/quan-ly-thuong-luong"); // We will create this page soon
   } catch (e: any) {
     console.error(e);
-    notify.error(e.response?.data?.message || "Có lỗi xảy ra khi đặt hàng");
-    showPaymentModal.value = false;
+    notify.error(e.response?.data?.message || "Có lỗi xảy ra khi gửi yêu cầu thương lượng");
   } finally {
     isCheckingOut.value = false;
   }
 };
+
 
 const contactSeller = () => {
   if (!user) {
@@ -659,20 +659,30 @@ watch(
                 >
                 Vị trí & Tính khoảng cách
               </h3>
-              <select
-                v-if="savedLocations.length > 0"
-                v-model="selectedSavedLocation"
-                class="text-xs p-1.5 border border-slate-200 rounded-lg outline-none bg-slate-50 cursor-pointer max-w-[200px] truncate"
-              >
-                <option value="">-- Chọn Kho đã lưu --</option>
-                <option
-                  v-for="loc in savedLocations"
-                  :key="loc.id"
-                  :value="loc.id"
+              <div class="flex items-center gap-2">
+                <select
+                  v-if="savedLocations.length > 0"
+                  v-model="selectedSavedLocation"
+                  class="text-xs p-1.5 border border-emerald-300 rounded-lg outline-none bg-emerald-50/50 font-medium cursor-pointer max-w-[200px] truncate"
                 >
-                  {{ loc.ten_goi }}
-                </option>
-              </select>
+                  <option value="">-- Chọn Kho đã lưu --</option>
+                  <option
+                    v-for="loc in savedLocations"
+                    :key="loc.id"
+                    :value="loc.id"
+                  >
+                    📍 {{ loc.ten_goi }}
+                  </option>
+                </select>
+                <router-link
+                  to="/profile"
+                  class="text-[11px] text-[#2E7D32] hover:underline font-bold flex items-center gap-1"
+                  title="Quản lý kho đã lưu trong hồ sơ"
+                >
+                  <span class="material-symbols-outlined text-xs">add_location_alt</span>
+                  {{ savedLocations.length > 0 ? 'Quản lý kho' : '+ Thêm kho' }}
+                </router-link>
+              </div>
             </div>
 
             <!-- Tìm kiếm địa điểm kho -->
@@ -768,6 +778,24 @@ watch(
                 >
                 {{ tc.ten_tieu_chuan }}
               </div>
+            </div>
+
+            <!-- Badge Loại hình cung cấp bài đăng -->
+            <div class="mt-3">
+              <span
+                v-if="post.loai_cung_cap === 'du_kien'"
+                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-sm"
+              >
+                <span class="material-symbols-outlined text-[18px]">event_available</span>
+                Dự kiến cung cấp từ ngày: {{ post.ngay_bat_dau_cung_cap ? new Date(post.ngay_bat_dau_cung_cap).toLocaleDateString('vi-VN') : 'Sắp tới' }}
+              </span>
+              <span
+                v-else
+                class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm"
+              >
+                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                Lấy hàng ngay (Nông sản sẵn có)
+              </span>
             </div>
           </div>
 
@@ -1120,7 +1148,7 @@ watch(
               Nhắn tin Nông dân
             </button>
             <button
-              @click="handleCheckout"
+              @click="handleThuongLuong"
               :disabled="
                 isCheckingOut ||
                 post.trang_thai === 'an' ||
@@ -1130,7 +1158,7 @@ watch(
               "
               class="w-full sm:w-1/2 flex items-center justify-center gap-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white border-2 border-[#2E7D32] px-6 py-4 rounded-2xl font-bold transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:bg-slate-300 disabled:border-slate-300 disabled:hover:bg-slate-300"
             >
-              <span class="material-symbols-outlined">payments</span>
+              <span class="material-symbols-outlined">handshake</span>
               {{
                 post.trang_thai === "da_xoa"
                   ? "Bài đăng đã bị xóa"
@@ -1140,9 +1168,7 @@ watch(
                       ? "Đã bán hết"
                       : post.trang_thai === "cho_duyet"
                         ? "Chờ duyệt"
-                        : isCheckingOut
-                          ? "Đang xử lý..."
-                          : "Đặt Hàng & Cọc 15%"
+                        : "Thương Lượng Giá"
               }}
             </button>
           </div>
@@ -1157,100 +1183,82 @@ watch(
       @hide="isLightboxOpen = false"
     />
 
-    <!-- Modal Thanh Toán Cọc 15% -->
+    <!-- Modal Thương Lượng Giá -->
     <div
-      v-if="showPaymentModal"
-      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      v-if="showThuongLuongModal"
+      class="fixed inset-0 z-[99999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
     >
       <div
-        class="bg-white rounded-[2rem] p-8 max-w-md w-full mx-4 shadow-2xl relative overflow-hidden text-center"
+        class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[82vh] my-auto"
       >
-        <!-- Close button if still at step 0 (can cancel) -->
-        <button
-          v-if="paymentStep === 0"
-          @click="showPaymentModal = false"
-          class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full transition-colors"
-        >
-          <span class="material-symbols-outlined text-lg">close</span>
-        </button>
-
-        <h3 class="text-2xl font-black text-slate-800 mb-6 font-sans">
-          Thanh toán Cọc 15%
-        </h3>
-        <p class="text-slate-600 text-sm mb-4">
-          Mở app Ngân hàng hoặc MoMo để quét mã QR dưới đây
-        </p>
-
         <div
-          class="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100 flex flex-col items-center justify-center mb-6 relative"
+          class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50"
         >
-          <div
-            v-if="paymentStep === 0"
-            class="w-48 h-48 bg-white border-4 border-[#2E7D32] p-2 rounded-xl"
+          <h3 class="font-black text-lg text-slate-800 tracking-tight">
+            Thương Lượng Giá
+          </h3>
+          <button
+            @click="showThuongLuongModal = false"
+            class="text-slate-400 hover:text-slate-700 transition p-1.5 bg-white rounded-full shadow-sm"
           >
-            <img
-              src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=B2B_NONG_SAN_MOCK_PAYMENT"
-              alt="QR Code"
-              class="w-full h-full object-contain mix-blend-multiply"
-            />
-          </div>
-          <!-- Scanning overlay -->
-          <div
-            v-if="paymentStep === 0"
-            class="absolute inset-0 flex items-center justify-center flex-col gap-3"
-          >
-            <div
-              class="w-full h-1 bg-[#2E7D32]/50 animate-[scan_2s_ease-in-out_infinite] shadow-[0_0_15px_#2E7D32]"
-            ></div>
-          </div>
-
-          <!-- Success State -->
-          <div
-            v-if="paymentStep === 1"
-            class="w-48 h-48 bg-white rounded-xl flex flex-col items-center justify-center text-[#2E7D32]"
-          >
-            <span class="material-symbols-outlined text-7xl mb-2"
-              >check_circle</span
+            <span class="material-symbols-outlined block text-[20px]"
+              >close</span
             >
-            <span class="font-bold">Đã nhận thanh toán!</span>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-5 flex-1 overflow-y-auto">
+          <p class="text-sm text-slate-600 font-medium">
+            Vui lòng nhập mức giá bạn muốn đề xuất với nông dân.
+          </p>
+
+          <div class="space-y-4">
+            <div v-for="item in pendingCheckoutItems" :key="item.phanloai_id" class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Sản Phẩm & Số Lượng</label>
+                <div class="text-sm font-bold text-slate-800">
+                  {{ item.ten_phan_loai }} - {{ phanLoaiQuantities[item.phanloai_id] }} {{ post.don_vi_tinh }}
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Mức Giá Đề Xuất (VNĐ/{{ post.don_vi_tinh }})</label>
+                <input
+                  v-model="giaDeXuat[item.phanloai_id]"
+                  type="number"
+                  class="w-full text-lg font-black text-[#2E7D32] p-2.5 rounded-lg border border-slate-200 outline-none focus:border-[#2E7D32] bg-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Lời Nhắn Cho Nông Dân (Không Bắt Buộc)</label>
+              <textarea
+                v-model="ghiChuThuongLuong"
+                rows="3"
+                placeholder="Ví dụ: Tôi muốn hợp tác lâu dài..."
+                class="w-full text-sm p-3 rounded-xl border border-slate-200 outline-none focus:border-[#2E7D32]"
+              ></textarea>
+            </div>
           </div>
         </div>
 
         <div
-          class="bg-[#e8f5e9] p-4 rounded-xl border border-[#2E7D32]/20 mb-6"
+          class="p-5 border-t border-slate-100 bg-white grid grid-cols-2 gap-3"
         >
-          <div
-            class="flex justify-between items-center text-sm mb-2 text-slate-600"
+          <button
+            @click="showThuongLuongModal = false"
+            class="py-3.5 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition"
           >
-            <span>Tổng đơn hàng:</span>
-            <span class="font-bold">{{ formatPrice(grandTotalAmount) }}</span>
-          </div>
-          <div
-            class="flex justify-between items-center text-base font-black text-slate-900 border-t border-[#2E7D32]/20 pt-2"
+            Hủy Bỏ
+          </button>
+          <button
+            @click="executeThuongLuong"
+            :disabled="isCheckingOut"
+            class="py-3.5 rounded-2xl font-bold text-white bg-[#2E7D32] hover:bg-[#1B5E20] transition shadow-md shadow-emerald-200 disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            <span>Số tiền cọc (15%):</span>
-            <span class="text-xl text-[#d00000]">{{
-              formatPrice(grandTotalAmount * 0.15)
-            }}</span>
-          </div>
+            <span v-if="isCheckingOut" class="material-symbols-outlined animate-spin text-[20px]">sync</span>
+            <span>Gửi Yêu Cầu</span>
+          </button>
         </div>
-
-        <p
-          v-if="paymentStep === 0"
-          class="text-xs text-slate-500 flex items-center justify-center gap-1"
-        >
-          <span class="material-symbols-outlined text-[14px] animate-spin"
-            >sync</span
-          >
-          Đang chờ quét mã thanh toán...
-        </p>
-        <p
-          v-if="paymentStep === 1"
-          class="text-sm font-bold text-[#2E7D32] flex items-center justify-center gap-1"
-        >
-          <span class="material-symbols-outlined text-[18px]">verified</span>
-          Đang tạo đơn hàng, vui lòng đợi...
-        </p>
       </div>
     </div>
   </main>

@@ -3,11 +3,50 @@ import { ref, onMounted } from "vue";
 import { UsersAdmin } from "@/service/users.ts";
 import { notify } from "@/utils/notifier.ts";
 
+import { computed } from "vue";
+
 const users = ref<any[]>([]);
 const loading = ref(true);
+const searchKeyword = ref("");
+
+const filteredUsers = computed(() => {
+  if (!searchKeyword.value) return users.value;
+  const kw = searchKeyword.value.toLowerCase();
+  return users.value.filter((u: any) => {
+    return (
+      (u.email && u.email.toLowerCase().includes(kw)) ||
+      (u.full_name && u.full_name.toLowerCase().includes(kw)) ||
+      (u.ho_ten && u.ho_ten.toLowerCase().includes(kw)) ||
+      (u.ten_cong_ty && u.ten_cong_ty.toLowerCase().includes(kw)) ||
+      (u.phone && u.phone.includes(kw)) ||
+      (u.so_dien_thoai && u.so_dien_thoai.includes(kw))
+    );
+  });
+});
+
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredUsers.value.length / itemsPerPage);
+});
+
+const paginatedUsers = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredUsers.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
 
 const loadUsers = async () => {
   loading.value = true;
+  currentPage.value = 1;
   try {
     const res = await UsersAdmin.getAll();
     // Backend trả về mảng user
@@ -40,9 +79,17 @@ onMounted(() => {
   <div class="accounts-root">
     <div class="page-header">
       <h1 class="page-title">Quản lý Doanh Nghiệp & Nông Dân</h1>
-      <button @click="loadUsers" class="refresh-btn">
-        <span class="material-symbols-outlined">refresh</span>
-      </button>
+      <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="Tìm tên, email, SĐT..."
+          class="px-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100 transition-all min-w-[260px]"
+        />
+        <button @click="loadUsers" class="refresh-btn">
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+      </div>
     </div>
 
     <div class="table-card">
@@ -70,7 +117,7 @@ onMounted(() => {
               Chưa có người dùng nào
             </td>
           </tr>
-          <tr v-for="u in users" :key="u.user_id || u.id">
+          <tr v-for="u in paginatedUsers" :key="u.user_id || u.id">
             <td class="font-medium text-gray-500">#{{ u.user_id || u.id }}</td>
             <td class="font-semibold text-gray-800">{{ u.email }}</td>
             <td>{{ u.full_name || u.ho_ten || u.ten_cong_ty || "-" }}</td>
@@ -116,6 +163,33 @@ onMounted(() => {
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination-container">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="page-btn"
+        >
+          &lt;
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="page-btn"
+          :class="{ active: currentPage === page }"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="page-btn"
+        >
+          &gt;
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -275,5 +349,44 @@ onMounted(() => {
   100% {
     transform: rotate(360deg);
   }
+}
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid #edf2f7;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #4a5568;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.page-btn.active {
+  background: #2e7d32;
+  color: white;
+  border-color: #2e7d32;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

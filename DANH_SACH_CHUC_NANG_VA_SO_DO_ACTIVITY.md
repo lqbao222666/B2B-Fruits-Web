@@ -154,42 +154,42 @@ Các bước vẽ sơ đồ Activity Diagram (3 Cột):
 
 --------------------------------------------------------------------------------
 
-CHỨC NĂNG 7: DOANH NGHIỆP ĐẶT HÀNG NÔNG SẢN (TẠO ĐƠN HÀNG B2B)
-Hình 3.30: Giao diện chức năng đặt hàng nông sản
+CHỨC NĂNG 7: DOANH NGHIỆP THƯƠNG LƯỢNG VÀ ĐẶT HÀNG NÔNG SẢN (TẠO ĐƠN HÀNG B2B)
+Hình 3.30: Giao diện chức năng thương lượng và đặt hàng nông sản
 
 Các bước vẽ sơ đồ Activity Diagram (3 Cột):
 [Bắt đầu]
-1. Cột [Người dùng]: Doanh nghiệp xem chi tiết bài đăng bán nông sản, chọn số lượng mua và bấm nút "Đặt hàng B2B".
-2. Cột [Giao diện người dùng]: Hiển thị màn hình xác nhận thông tin đơn hàng (Tên nông sản, Số lượng đặt, Đơn giá, Địa chỉ giao hàng, Hình thức giao hàng).
-3. Cột [Người dùng]: Doanh nghiệp chọn hình thức giao hàng (B2B Giao tận nơi / Tự đến lấy) và nhấn "Xác nhận đặt hàng".
-4. Cột [Giao diện người dùng]: Gửi yêu cầu khởi tạo đơn hàng lên hệ thống backend.
-5. Cột [Hệ thống xử lý]: Kiểm tra số lượng tồn kho khả dụng của bài đăng nông sản.
-   - 6.1 (Nếu số lượng tồn kho đủ): Cột [Hệ thống xử lý] -> Tạo bản ghi đơn hàng với mã đơn duy nhất, trạng thái "Chờ xác nhận" (cho_xac_nhan), tính 15% tiền cọc và phí vận chuyển, tạm giữ số lượng sản phẩm -> Chuyển sang bước 7.
-   - 6.2 (Nếu số lượng tồn kho không đủ): Cột [Giao diện người dùng] -> Hiển thị thông báo "Số lượng nông sản còn lại không đủ đáp ứng" -> Quay lại bước 1.
-7. Cột [Hệ thống xử lý]: Gửi thông báo đơn hàng mới tới Nông dân.
-8. Cột [Giao diện người dùng]: Hiển thị thông báo "Tạo đơn hàng B2B thành công, đơn hàng đang chờ Nông dân xác nhận và thanh toán phí vận chuyển/tiền cọc".
+1. Cột [Người dùng]: Doanh nghiệp xem chi tiết bài đăng bán nông sản (giá trên bài đăng là giá tham khảo). Doanh nghiệp chọn số lượng mua, nhập mức "Đơn giá đề xuất" và bấm "Gửi yêu cầu thương lượng".
+2. Cột [Giao diện người dùng]: Gửi yêu cầu thương lượng giá lên hệ thống.
+3. Cột [Hệ thống xử lý]: Tạo bản ghi thương lượng trạng thái "Chờ nông dân", thông báo đến Nông dân.
+4. Cột [Người dùng]: Nông dân xem yêu cầu và chọn hành động (Đồng ý / Thương lượng lại / Từ chối).
+   - 5.1 (Nếu Nông dân bấm "Đồng ý"): Cột [Hệ thống xử lý] -> Cập nhật trạng thái "Đã thống nhất" -> Chuyển sang bước 6.
+   - 5.2 (Nếu Nông dân bấm "Thương lượng lại"): Cột [Hệ thống xử lý] -> Cập nhật trạng thái "Chờ doanh nghiệp", lưu mức giá mới và thông báo cho Doanh nghiệp (Quá trình này lặp lại giữa 2 bên cho đến khi 1 bên bấm Đồng ý) -> Quay lại bước 4 (với vai trò ngược lại).
+   - 5.3 (Nếu Nông dân bấm "Từ chối"): Cột [Hệ thống xử lý] -> Cập nhật trạng thái "Từ chối", thông báo cho Doanh nghiệp -> [Kết thúc].
+6. Cột [Hệ thống xử lý]: Khi 2 bên đã "Đồng ý" mức giá cuối cùng, tự động kiểm tra số lượng tồn kho khả dụng của bài đăng.
+   - 7.1 (Nếu số lượng tồn kho đủ): Cột [Hệ thống xử lý] -> Tạo bản ghi Đơn hàng chính thức, trạng thái "Chờ thanh toán cọc" (cho_thanh_toan_coc), tính 15% tiền cọc dựa trên Đơn giá đã chốt, tạm giữ số lượng sản phẩm -> Chuyển sang bước 8.
+   - 7.2 (Nếu số lượng tồn kho không đủ): Cột [Giao diện người dùng] -> Thông báo giao dịch thất bại do số lượng tồn kho không đáp ứng -> [Kết thúc].
+8. Cột [Hệ thống xử lý]: Gửi thông báo đơn hàng mới đã được tạo thành công tới cả hai bên.
+9. Cột [Giao diện người dùng]: Hiển thị thông báo "Thương lượng thành công, đơn hàng đã được tạo. Vui lòng tiến hành thanh toán tiền cọc".
 [Kết thúc]
 
 
 --------------------------------------------------------------------------------
 
-CHỨC NĂNG 8: XÁC NHẬN ĐƠN HÀNG VÀ THANH TOÁN CỌC / PHÍ VẬN CHUYỂN
-Hình 3.31: Giao diện xác nhận đơn hàng nông dân
-Hình 3.32: Giao diện thanh toán tiền cọc doanh nghiệp
+CHỨC NĂNG 8: THANH TOÁN TIỀN CỌC VÀ CHUẨN BỊ GIAO HÀNG
+Hình 3.31: Giao diện thanh toán tiền cọc doanh nghiệp
+Hình 3.32: Giao diện xác nhận chuẩn bị hàng của nông dân
 
 Các bước vẽ sơ đồ Activity Diagram (3 Cột):
 [Bắt đầu]
-1. Cột [Người dùng]: Nông dân mở quản lý đơn hàng bán, chọn đơn hàng ở trạng thái "Chờ xác nhận" và bấm "Xác nhận & Thanh toán phí vận chuyển".
-2. Cột [Hệ thống xử lý]: Chuyển hướng Nông dân tới Cổng thanh toán để thực hiện nộp phí vận chuyển.
-3. Cột [Hệ thống xử lý]: Kiểm tra kết quả thanh toán phí vận chuyển từ cổng thanh toán.
-   - 4.1 (Nếu Nông dân thanh toán phí vận chuyển thành công): Cột [Hệ thống xử lý] -> Đánh dấu đã thanh toán phí vận chuyển, gửi thông báo yêu cầu Doanh nghiệp thanh toán tiền cọc 15% -> Chuyển sang bước 5.
-   - 4.2 (Nếu thanh toán thất bại): Cột [Giao diện người dùng] -> Hiển thị thông báo thanh toán phí vận chuyển thất bại -> Quay lại bước 1.
-5. Cột [Người dùng]: Doanh nghiệp mở chi tiết đơn hàng và chọn "Thanh toán tiền cọc (15%)".
-6. Cột [Hệ thống xử lý]: Chuyển hướng Doanh nghiệp tới Cổng thanh toán trực tuyến.
-7. Cột [Hệ thống xử lý]: Kiểm tra kết quả thanh toán tiền cọc.
-   - 8.1 (Nếu Doanh nghiệp thanh toán tiền cọc thành công): Cột [Hệ thống xử lý] -> Đánh dấu đã nộp cọc, đổi trạng thái đơn hàng sang "Đã xác nhận" (da_xac_nhan), sinh mã QR/OTP xác nhận giao nhận -> Chuyển sang bước 9.
-   - 8.2 (Nếu thanh toán tiền cọc thất bại): Cột [Giao diện người dùng] -> Hiển thị thông báo thanh toán tiền cọc thất bại -> Quay lại bước 5.
-9. Cột [Giao diện người dùng]: Hiển thị thông báo "Đơn hàng đã được xác nhận thành công từ hai bên, sẵn sàng đóng gói và vận chuyển".
+1. Cột [Người dùng]: Doanh nghiệp mở chi tiết đơn hàng (trạng thái "Chờ thanh toán cọc") và chọn "Thanh toán tiền cọc (15%)".
+2. Cột [Hệ thống xử lý]: Chuyển hướng Doanh nghiệp tới Cổng thanh toán trực tuyến.
+3. Cột [Hệ thống xử lý]: Kiểm tra kết quả thanh toán tiền cọc từ cổng thanh toán.
+   - 4.1 (Nếu Doanh nghiệp thanh toán tiền cọc thành công): Cột [Hệ thống xử lý] -> Đánh dấu đã nộp cọc, đổi trạng thái đơn hàng sang "Chờ giao hàng" (cho_giao_hang), gửi thông báo cho Nông dân chuẩn bị hàng -> Chuyển sang bước 5.
+   - 4.2 (Nếu thanh toán tiền cọc thất bại): Cột [Giao diện người dùng] -> Hiển thị thông báo thanh toán tiền cọc thất bại -> Quay lại bước 1.
+5. Cột [Người dùng]: Nông dân nhận thông báo, tiến hành đóng gói và bấm "Xác nhận sẵn sàng giao hàng".
+6. Cột [Hệ thống xử lý]: Lưu trạng thái sẵn sàng, sinh mã QR/OTP xác nhận giao nhận, thông báo cho Đơn vị vận chuyển (Admin) đến lấy hàng.
+7. Cột [Giao diện người dùng]: Hiển thị thông báo "Đã xác nhận chuẩn bị hàng, chờ đơn vị vận chuyển đến lấy".
 [Kết thúc]
 
 
@@ -270,20 +270,22 @@ Các bước vẽ sơ đồ Activity Diagram (3 Cột):
 
 --------------------------------------------------------------------------------
 
-CHỨC NĂNG 13: GỬI VÀ XỬ LÝ BÁO CÁO KHIẾU NẠI GIAO DỊCH
-Hình 3.38: Giao diện gửi báo cáo khiếu nại
-Hình 3.39: Giao diện admin xử lý khiếu nại
+CHỨC NĂNG 13: GỬI VÀ XỬ LÝ BÁO CÁO SỰ CỐ TRƯỚC GIAO HÀNG (NÔNG DÂN)
+Hình 3.38: Giao diện Nông dân gửi báo cáo sự cố trước giao hàng
+Hình 3.39: Giao diện admin xử lý gia hạn / hủy hoàn tiền cọc
 
 Các bước vẽ sơ đồ Activity Diagram (3 Cột):
 [Bắt đầu]
-1. Cột [Người dùng]: Người dùng chọn đơn hàng hoặc bài đăng có sự cố, bấm nút "Gửi báo cáo / Khiếu nại".
-2. Cột [Giao diện người dùng]: Hiển thị biểu mẫu gửi khiếu nại (Chọn loại vi phạm: nông sản giả/sai mô tả, nghi ngờ lừa đảo...; nhập mô tả; tải hình ảnh/video bằng chứng).
-3. Cột [Người dùng]: Nhập đầy đủ thông tin và bấm "Gửi khiếu nại".
-4. Cột [Hệ thống xử lý]: Lưu báo cáo khiếu nại vào CSDL với trạng thái "Chờ xử lý" (cho_xu_ly), đồng thời phát thông báo cảnh báo đến Dashboard Admin.
-5. Cột [Người dùng]: Admin truy cập danh sách khiếu nại trên Dashboard, xem xét bằng chứng và thông tin giao dịch của hai bên.
-6. Cột [Người dùng]: Admin đưa ra kết luận xử lý (Chấp nhận khiếu nại / Từ chối khiếu nại).
-   - 7.1 (Nếu Chấp nhận khiếu nại): Cột [Hệ thống xử lý] -> Đổi trạng thái báo cáo = "Đã xử lý" (da_xu_ly), tiến hành đóng băng đơn hàng / hoàn tiền, xử lý chế tài khóa tài khoản vi phạm -> Chuyển sang bước 8.1.
-   - 7.2 (Nếu Từ chối khiếu nại): Cột [Hệ thống xử lý] -> Đổi trạng thái báo cáo = "Đóng lại" (dong_lai), lưu lý do từ chối -> Chuyển sang bước 8.2.
-8.1. Cột [Giao diện người dùng]: Hiển thị thông báo "Khiếu nại đã được Admin giải quyết, đơn hàng/tài khoản đã được xử lý" -> [Kết thúc]
-8.2. Cột [Giao diện người dùng]: Hiển thị thông báo "Khiếu nại đã bị từ chối do không đủ bằng chứng" -> [Kết thúc]
+1. Cột [Nông dân]: Khi Doanh nghiệp đã thanh toán đặt cọc 15%, Nông dân kiểm tra lại sản lượng/chất lượng thực tế tại vườn, nếu phát hiện sự cố (thiếu số lượng hoặc chất lượng không đạt) -> Bấm nút "Báo cáo sự cố trước giao hàng".
+2. Cột [Giao diện người dùng]: Hiển thị biểu mẫu Báo cáo sự cố (Chọn lý do: Thiếu số lượng / Chất lượng không đạt; Chọn đề xuất: Gia hạn thời gian dời ngày giao HOẶC Hủy đơn & Hoàn tiền cọc; tải ảnh bằng chứng tại vườn).
+3. Cột [Nông dân]: Điền mô tả chi tiết, đính kèm ngày dời (nếu gia hạn) và bấm "Gửi Báo Cáo Sự Cố".
+4. Cột [Hệ thống xử lý]: Lưu báo cáo vào CSDL với trạng thái "Chờ xử lý" (cho_xu_ly), gửi thông báo cảnh báo tức thì cho Doanh nghiệp mua hàng và Dashboard Admin.
+5. Cột [Quản trị viên]: Admin truy cập danh sách báo cáo trên Dashboard, xem xét đề xuất, ghi chú và hình ảnh bằng chứng tại vườn.
+6. Cột [Quản trị viên]: Admin đưa ra phán quyết (Chấp nhận đề xuất gia hạn / Chấp nhận đề xuất hủy hoàn tiền / Từ chối).
+   - 7.1 (Nếu Chấp nhận Gia hạn): Cột [Hệ thống xử lý] -> Cập nhật ngày giao hàng mới cho Đơn hàng, gửi thông báo xác nhận cho Doanh nghiệp & Nông dân -> Chuyển sang bước 8.1.
+   - 7.2 (Nếu Chấp nhận Hủy & Hoàn tiền): Cột [Hệ thống xử lý] -> Chuyển trạng thái đơn = "Đã hủy", xử lý hoàn tiền cọc cho Doanh nghiệp, TỰ ĐỘNG CỘNG HOÀN LẠI SỐ LƯỢNG về Bài đăng ban đầu để Nông dân cập nhật lại -> Chuyển sang bước 8.2.
+   - 7.3 (Nếu Từ chối): Cột [Hệ thống xử lý] -> Đổi trạng thái = "Đóng lại", lưu lý do từ chối -> Chuyển sang bước 8.3.
+8.1. Cột [Giao diện người dùng]: Hiển thị thông báo "Đơn hàng đã được gia hạn ngày giao thành công" -> [Kết thúc]
+8.2. Cột [Giao diện người dùng]: Hiển thị thông báo "Đơn hàng đã hủy & hoàn tiền cọc, số lượng bài đăng đã được khôi phục" -> [Kết thúc]
+8.3. Cột [Giao diện người dùng]: Hiển thị thông báo "Báo cáo sự cố đã bị Admin từ chối" -> [Kết thúc]
 [Kết thúc]

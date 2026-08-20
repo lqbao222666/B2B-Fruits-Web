@@ -520,12 +520,10 @@ const calculateShippingFee = (
   return fee;
 };
 
-// State Giả lập Thanh toán QR 3s
+// State Giả lập Thanh toán QR
 const showMockPaymentModal = ref(false);
-const mockPaymentCountdown = ref(3);
 const isMockPaymentSuccess = ref(false);
 const mockPaymentAmount = ref(0);
-let mockTimer: any = null;
 
 const startMockPayment = () => {
   if (!deliveryLocation.value) {
@@ -542,26 +540,26 @@ const startMockPayment = () => {
 
   showCheckoutModal.value = false;
   showMockPaymentModal.value = true;
-  mockPaymentCountdown.value = 3;
   isMockPaymentSuccess.value = false;
+};
 
-  if (mockTimer) clearInterval(mockTimer);
-
-  mockTimer = setInterval(async () => {
-    if (mockPaymentCountdown.value > 1) {
-      mockPaymentCountdown.value--;
-    } else {
-      clearInterval(mockTimer);
-      mockPaymentCountdown.value = 0;
-      isMockPaymentSuccess.value = true;
-      await executeCheckout();
-    }
-  }, 1000);
+const confirmCartDepositPayment = async () => {
+  isProcessing.value = true;
+  try {
+    await executeCheckout();
+    isMockPaymentSuccess.value = true;
+    setTimeout(() => {
+      showMockPaymentModal.value = false;
+    }, 1500);
+  } catch (e) {
+    console.error(e);
+  } finally {
+    isProcessing.value = false;
+  }
 };
 
 const closeMockPaymentModal = () => {
   showMockPaymentModal.value = false;
-  if (mockTimer) clearInterval(mockTimer);
 };
 
 const executeCheckout = async () => {
@@ -997,10 +995,10 @@ onMounted(() => {
     <!-- CHECKOUT MODAL (Đặt cọc 15%) -->
     <div
       v-if="showCheckoutModal"
-      class="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      class="fixed inset-0 z-[9999] flex justify-center bg-black/60 backdrop-blur-sm p-4 pt-24 pb-12 overflow-y-auto"
     >
       <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-fit max-h-fit flex flex-col relative mt-16 mb-10"
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-5xl flex flex-col relative my-auto max-h-[82vh] overflow-y-auto"
       >
         <button
           @click="showCheckoutModal = false"
@@ -1035,20 +1033,30 @@ onMounted(() => {
                 <p class="font-bold text-slate-700 text-sm">
                   1. Vị trí giao nhận hàng (Đã tự động lấy từ Chi Tiết)
                 </p>
-                <select
-                  v-if="savedLocations.length > 0"
-                  v-model="selectedSavedLocation"
-                  class="text-xs p-2 border border-slate-200 rounded-lg outline-none bg-slate-50 cursor-pointer w-48 text-ellipsis overflow-hidden whitespace-nowrap"
-                >
-                  <option value="">-- Chọn kho đã lưu --</option>
-                  <option
-                    v-for="loc in savedLocations"
-                    :key="loc.id"
-                    :value="loc.id"
+                <div class="flex items-center gap-2">
+                  <select
+                    v-if="savedLocations.length > 0"
+                    v-model="selectedSavedLocation"
+                    class="text-xs p-2 border border-emerald-300 rounded-lg outline-none bg-emerald-50/50 font-medium cursor-pointer max-w-[200px] text-ellipsis overflow-hidden whitespace-nowrap"
                   >
-                    {{ loc.ten_goi }}
-                  </option>
-                </select>
+                    <option value="">-- Chọn kho đã lưu --</option>
+                    <option
+                      v-for="loc in savedLocations"
+                      :key="loc.id"
+                      :value="loc.id"
+                    >
+                      📍 {{ loc.ten_goi }}
+                    </option>
+                  </select>
+                  <router-link
+                    to="/profile"
+                    class="text-[11px] text-[#2E7D32] hover:underline font-bold flex items-center gap-1"
+                    title="Quản lý kho đã lưu trong hồ sơ"
+                  >
+                    <span class="material-symbols-outlined text-xs">add_location_alt</span>
+                    {{ savedLocations.length > 0 ? 'Quản lý kho' : '+ Thêm kho' }}
+                  </router-link>
+                </div>
               </div>
 
               <div class="flex gap-2">
@@ -1252,97 +1260,167 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- MOCK PAYMENT MODAL (Quét mã QR 3s giả lập) -->
+    <!-- MOCK PAYMENT MODAL (Chọn phương thức MoMo / VietQR) -->
     <div
       v-if="showMockPaymentModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+      class="fixed inset-0 z-[99999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
     >
       <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 text-center relative overflow-hidden animate-fade-in"
+        class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[82vh] my-auto"
       >
-        <button
-          @click="closeMockPaymentModal"
-          class="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors z-10"
+        <div
+          class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50"
         >
-          <span class="material-symbols-outlined text-slate-600">close</span>
-        </button>
-
-        <div v-if="!isMockPaymentSuccess" class="space-y-4">
-          <div
-            class="flex items-center justify-center gap-2 text-[#2E7D32] font-black uppercase text-xs tracking-wider"
-          >
-            <span class="material-symbols-outlined text-lg animate-bounce"
-              >qr_code_scanner</span
-            >
-            Cổng Thanh Toán QR Giả Lập (MoMo / Banking)
-          </div>
-
-          <h3 class="text-xl font-black text-slate-900">
-            Quét Mã QR Đặt Cọc 15%
+          <h3 class="font-black text-lg text-slate-800 tracking-tight">
+            Thanh Toán Đặt Cọc 15%
           </h3>
-          <p class="text-xs text-slate-500">
-            Hệ thống đang tự động nhận diện quét mã QR trong 3 giây...
+          <button
+            @click="closeMockPaymentModal"
+            class="text-slate-400 hover:text-slate-700 transition p-1.5 bg-white rounded-full shadow-sm"
+          >
+            <span class="material-symbols-outlined block text-[20px]"
+              >close</span
+            >
+          </button>
+        </div>
+
+        <div v-if="!isMockPaymentSuccess" class="p-6 space-y-5 flex-1 overflow-y-auto">
+          <p class="text-sm text-slate-600 font-medium">
+            Vui lòng chọn phương thức thanh toán và quét mã QR để hoàn tất số tiền cọc
+            <strong class="text-emerald-700 text-lg ml-1">{{
+              formatPrice(mockPaymentAmount)
+            }}</strong
+            >.
           </p>
 
-          <!-- Bảng thông tin giá tiền -->
-          <div
-            class="bg-slate-50 border border-slate-200 p-4 rounded-2xl inline-block w-full"
-          >
-            <span
-              class="text-xs text-slate-400 font-bold uppercase tracking-wider block mb-1"
-              >Số tiền đặt cọc 15% cần thanh toán</span
+          <!-- Nút chọn phương thức thanh toán -->
+          <div class="flex gap-3">
+            <button
+              @click="remainingPaymentMethod = 'momo'"
+              :class="[
+                'flex-1 py-3 border-2 rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition',
+                remainingPaymentMethod === 'momo'
+                  ? 'bg-[#a50064] text-white border-[#a50064] shadow-md shadow-pink-200'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#a50064] hover:text-[#a50064] hover:bg-pink-50',
+              ]"
             >
-            <span class="text-3xl font-black text-[#2E7D32]">{{
-              formatPrice(mockPaymentAmount)
-            }}</span>
+              <span class="material-symbols-outlined text-[24px]"
+                >account_balance_wallet</span
+              >
+              MoMo
+            </button>
+            <button
+              @click="remainingPaymentMethod = 'chuyen_khoan'"
+              :class="[
+                'flex-1 py-3 border-2 rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition',
+                remainingPaymentMethod === 'chuyen_khoan'
+                  ? 'bg-[#0052cc] text-white border-[#0052cc] shadow-md shadow-blue-200'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-[#0052cc] hover:text-[#0052cc] hover:bg-blue-50',
+              ]"
+            >
+              <span class="material-symbols-outlined text-[24px]"
+                >qr_code_scanner</span
+              >
+              VietQR
+            </button>
           </div>
 
-          <!-- Khung QR Code đẹp với hiệu ứng laser quét 3s -->
+          <!-- Khu vực QR code -->
           <div
-            class="relative w-48 h-48 mx-auto bg-white p-3 rounded-2xl border-4 border-[#2E7D32] shadow-inner flex items-center justify-center overflow-hidden"
+            :class="[
+              'border-2 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center transition-colors',
+              remainingPaymentMethod === 'momo'
+                ? 'bg-pink-50/50 border-[#a50064]/30'
+                : 'bg-blue-50/50 border-[#0052cc]/30',
+            ]"
           >
-            <!-- QR Code Image simulation -->
-            <svg
-              class="w-full h-full text-slate-800"
-              viewBox="0 0 100 100"
-              fill="currentColor"
-            >
-              <path
-                d="M10 10h30v30H10zM15 15v20h20V15zM20 20h10v10H20zM60 10h30v30H60zM65 15v20h20V15zM70 20h10v10H70zM10 60h30v30H10zM15 65v20h20V65zM20 70h10v10H20zM50 50h10v10H50zM70 50h20v10H70zM50 70h20v10H50zM80 70h10v20H80zM60 80h10v10H60z"
-              />
-            </svg>
-            <!-- Laser scanning line -->
             <div
-              class="absolute inset-x-0 h-1 bg-green-500 shadow-[0_0_15px_#22c55e] animate-pulse top-1/2"
-            ></div>
-          </div>
+              class="relative bg-white p-3.5 rounded-2xl shadow-sm transition-all"
+              :class="
+                remainingPaymentMethod === 'momo'
+                  ? 'ring-4 ring-[#a50064]/10'
+                  : 'ring-4 ring-[#0052cc]/10'
+              "
+            >
+              <img
+                src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"
+                class="w-40 h-40 opacity-90 mix-blend-multiply"
+                alt="QR Code"
+              />
 
-          <div
-            class="flex items-center justify-center gap-2 bg-green-50 text-[#2E7D32] px-4 py-2.5 rounded-full text-xs font-bold w-fit mx-auto border border-green-200"
-          >
-            <span class="material-symbols-outlined text-sm animate-spin"
-              >sync</span
-            >
-            Tự động xác nhận sau:
-            <strong class="text-sm text-green-800 font-black"
-              >{{ mockPaymentCountdown }}s</strong
-            >
+              <!-- Logo ở giữa QR -->
+              <div class="absolute inset-0 flex items-center justify-center">
+                <div
+                  class="bg-white p-2 rounded-xl shadow-md border border-slate-100 flex items-center justify-center"
+                >
+                  <img
+                    v-if="remainingPaymentMethod === 'momo'"
+                    src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png"
+                    class="w-8 h-8 object-contain"
+                    alt="MoMo Logo"
+                  />
+                  <img
+                    v-else
+                    src="https://upload.wikimedia.org/wikipedia/commons/c/ca/VietQR_Logo.svg"
+                    class="w-12 h-6 object-contain"
+                    alt="VietQR Logo"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p class="text-[13px] text-slate-500 mt-4 font-medium px-2">
+              Mở ứng dụng
+              <strong
+                :class="
+                  remainingPaymentMethod === 'momo'
+                    ? 'text-[#a50064]'
+                    : 'text-[#0052cc]'
+                "
+                >{{
+                  remainingPaymentMethod === "momo" ? "MoMo" : "Ngân hàng"
+                }}</strong
+              >
+              để quét mã.<br />
+              <span class="opacity-70 font-normal mt-1 block"
+                >(Đây là giao diện giả lập Demo)</span
+              >
+            </p>
           </div>
         </div>
 
         <!-- Giao diện Thành công -->
-        <div v-else class="py-6 space-y-4">
+        <div v-else class="p-8 text-center space-y-4">
           <div
             class="w-20 h-20 bg-green-100 text-[#2E7D32] rounded-full flex items-center justify-center mx-auto shadow-lg animate-bounce"
           >
             <span class="material-symbols-outlined text-5xl">check_circle</span>
           </div>
           <h3 class="text-2xl font-black text-slate-900">
-            Đã Quét Mã & Thanh Toán 15% Thành Công!
+            Thanh Toán Cọc 15% Thành Công!
           </h3>
           <p class="text-xs text-slate-500 font-medium">
-            Hệ thống đang trừ số lượng tồn kho bài đăng và tạo đơn hàng...
+            Đang tạo đơn hàng, vui lòng đợi...
           </p>
+        </div>
+
+        <div v-if="!isMockPaymentSuccess" class="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+          <button
+            @click="closeMockPaymentModal"
+            class="flex-1 py-3.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition"
+          >
+            Hủy bỏ
+          </button>
+          <button
+            @click="confirmCartDepositPayment"
+            :disabled="isProcessing"
+            class="flex-[2] py-3.5 bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-black uppercase tracking-wider rounded-xl transition shadow-lg shadow-green-200 flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined" v-if="!isProcessing"
+              >check_circle</span
+            >
+            {{ isProcessing ? "Đang xử lý..." : "Xác nhận đã thanh toán cọc" }}
+          </button>
         </div>
       </div>
     </div>
@@ -1350,10 +1428,10 @@ onMounted(() => {
     <!-- MODAL THANH TOÁN 85% CÒN LẠI -->
     <div
       v-if="showPayRemainingModal && payingOrder"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      class="fixed inset-0 z-[99999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-black/60 backdrop-blur-sm"
     >
       <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-6 relative"
+        class="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-6 relative max-h-[82vh] overflow-y-auto my-auto"
       >
         <button
           @click="showPayRemainingModal = false"

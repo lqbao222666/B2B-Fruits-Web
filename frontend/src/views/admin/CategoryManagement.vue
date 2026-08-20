@@ -19,11 +19,44 @@ interface ChungLoai {
   ten_chung_loai: string;
 }
 
+import { computed } from "vue";
+
 const categories = ref<DanhMuc[]>([]);
 const chungLoais = ref<ChungLoai[]>([]);
 const loading = ref(false);
 const showModal = ref(false);
 const isEditing = ref(false);
+const searchKeyword = ref("");
+
+const filteredCategories = computed(() => {
+  if (!searchKeyword.value) return categories.value;
+  const kw = searchKeyword.value.toLowerCase();
+  return categories.value.filter(
+    (c) =>
+      c.ten_danh_muc.toLowerCase().includes(kw) ||
+      c.slug.toLowerCase().includes(kw)
+  );
+});
+
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredCategories.value.length / itemsPerPage);
+});
+
+const paginatedCategories = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredCategories.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
 
 const form = ref({
   danhmuc_id: 0,
@@ -38,6 +71,7 @@ const getChungLoaiName = (cat: DanhMuc) => {
 
 const fetchCategories = async () => {
   loading.value = true;
+  currentPage.value = 1;
   try {
     const [data, clData] = await Promise.all([
       Category.getAllCategories(),
@@ -145,13 +179,21 @@ onMounted(() => {
           Cấu hình cây danh mục cho hệ thống
         </p>
       </div>
-      <button
-        @click="openAddModal"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
-      >
-        <span class="material-symbols-outlined text-sm">add</span>
-        Thêm danh mục
-      </button>
+      <div class="flex items-center gap-4">
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="Tìm tên, slug danh mục..."
+          class="px-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all min-w-[240px]"
+        />
+        <button
+          @click="openAddModal"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
+        >
+          <span class="material-symbols-outlined text-sm">add</span>
+          Thêm danh mục
+        </button>
+      </div>
     </div>
 
     <div
@@ -199,7 +241,7 @@ onMounted(() => {
         </thead>
         <tbody class="divide-y divide-gray-100 text-sm">
           <tr
-            v-for="cat in categories"
+            v-for="cat in paginatedCategories"
             :key="cat.danhmuc_id"
             class="hover:bg-gray-50/50 transition-colors"
           >
@@ -251,6 +293,33 @@ onMounted(() => {
           </tr>
         </tbody>
       </table>
+      
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-slate-100">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &lt;
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="w-8 h-8 flex items-center justify-center rounded-lg font-bold transition"
+          :class="currentPage === page ? 'bg-blue-600 text-white border border-blue-600' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &gt;
+        </button>
+      </div>
     </div>
 
     <!-- Modal Form -->

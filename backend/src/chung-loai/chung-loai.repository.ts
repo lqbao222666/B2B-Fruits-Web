@@ -1,5 +1,5 @@
 import { Injectable as NestInjectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, ChungLoai } from '@prisma/client';
 
 @NestInjectable()

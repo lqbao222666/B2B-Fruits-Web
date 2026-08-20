@@ -3,12 +3,50 @@ import { ref, onMounted } from "vue";
 import { BaiDang } from "@/service/baidang.ts";
 import { notify } from "@/utils/notifier.ts";
 
+import { computed } from "vue";
+
 const posts = ref<any[]>([]);
 const loading = ref(true);
 const currentTab = ref("tat_ca"); // 'tat_ca', 'cho_duyet', 'dang_ban', 'an'
+const searchKeyword = ref("");
+
+const filteredPosts = computed(() => {
+  if (!searchKeyword.value) return posts.value;
+  const kw = searchKeyword.value.toLowerCase();
+  return posts.value.filter((p: any) => {
+    return (
+      (p.ten_nong_san && p.ten_nong_san.toLowerCase().includes(kw)) ||
+      (p.tieu_de && p.tieu_de.toLowerCase().includes(kw)) ||
+      (p.nguoiDang?.user?.email && p.nguoiDang.user.email.toLowerCase().includes(kw)) ||
+      (p.nguoiDang?.user?.full_name && p.nguoiDang.user.full_name.toLowerCase().includes(kw)) ||
+      (p.nguoiDang?.ho_ten && p.nguoiDang.ho_ten.toLowerCase().includes(kw))
+    );
+  });
+});
+
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredPosts.value.length / itemsPerPage);
+});
+
+const paginatedPosts = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredPosts.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
 
 const loadPosts = async () => {
   loading.value = true;
+  currentPage.value = 1;
   try {
     const params: any = {};
     if (currentTab.value !== "tat_ca") {
@@ -108,9 +146,17 @@ onMounted(() => {
   <div class="products-root">
     <div class="page-header">
       <h1 class="page-title">Quản lý Bài Đăng Nông Sản</h1>
-      <button @click="loadPosts" class="refresh-btn">
-        <span class="material-symbols-outlined">refresh</span>
-      </button>
+      <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="Tìm nông sản, tên, email..."
+          class="px-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:border-green-600 focus:ring-2 focus:ring-green-100 transition-all min-w-[260px]"
+        />
+        <button @click="loadPosts" class="refresh-btn">
+          <span class="material-symbols-outlined">refresh</span>
+        </button>
+      </div>
     </div>
 
     <div class="tabs-container">
@@ -176,7 +222,7 @@ onMounted(() => {
               Chưa có bài đăng nào
             </td>
           </tr>
-          <tr v-for="p in posts" :key="p.baidang_id">
+          <tr v-for="p in paginatedPosts" :key="p.baidang_id">
             <td class="font-medium text-gray-500">#{{ p.baidang_id }}</td>
             <td>
               <div class="product-info">
@@ -188,8 +234,13 @@ onMounted(() => {
                 }}</span>
               </div>
             </td>
-            <td class="font-medium">
-              {{ p.nguoiDang?.ho_ten || `Nông dân #${p.nguoi_dang_id}` }}
+            <td>
+              <div class="font-medium text-gray-900">
+                {{ p.nguoiDang?.user?.full_name || p.nguoiDang?.ho_ten || `Nông dân #${p.nguoi_dang_id}` }}
+              </div>
+              <div class="text-[13px] font-bold text-gray-700 leading-tight">
+                {{ p.nguoiDang?.user?.email || "Không có email" }}
+              </div>
             </td>
             <td>{{ p.so_luong_con_lai }} {{ p.don_vi_tinh || "kg" }}</td>
             <td class="font-bold text-green-700">
@@ -231,6 +282,33 @@ onMounted(() => {
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="pagination-container">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="page-btn"
+        >
+          &lt;
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="page-btn"
+          :class="{ active: currentPage === page }"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="page-btn"
+        >
+          &gt;
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -400,5 +478,44 @@ onMounted(() => {
   100% {
     transform: rotate(360deg);
   }
+}
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid #edf2f7;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #4a5568;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.page-btn.active {
+  background: #2e7d32;
+  color: white;
+  border-color: #2e7d32;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

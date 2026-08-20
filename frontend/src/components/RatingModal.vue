@@ -84,7 +84,10 @@ const submitRating = async () => {
 
     const payload = {
       donhang_id: props.order.donhang_id,
-      baidang_id: props.order.baidang_id,
+      baidang_id:
+        props.order.baidang_id ||
+        props.order.chiTiets?.[0]?.baidang_id ||
+        undefined,
       nguoi_duoc_dg_id: props.order.nguoi_ban_id,
       diem_tong: diemTong.value,
       diem_chat_luong: diemChatLuong.value,
@@ -123,10 +126,10 @@ const closeModal = () => {
 <template>
   <div
     v-if="show"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+    class="fixed inset-0 z-[9999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/50 backdrop-blur-sm"
   >
     <div
-      class="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-fade-in-up"
+      class="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-fade-in-up max-h-[82vh] overflow-y-auto my-auto"
     >
       <!-- Header -->
       <div

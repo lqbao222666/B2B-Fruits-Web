@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { BaoGiaRepository } from './bao-gia.repository';
 import { CreateBaoGiaDto } from './dto/create-bao-gia.dto';
 import { PhanHoiBaoGiaDto } from './dto/phan-hoi-bao-gia.dto';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { LoaiThongBao } from '@prisma/client';
 
 @Injectable()
@@ -57,60 +57,6 @@ export class BaoGiaService {
       }
     }
 
-    let danhmucId = nhuCau.danhmuc_id;
-    if (!danhmucId) {
-      const firstDm = await tx.danhMuc.findFirst();
-      danhmucId = firstDm ? firstDm.danhmuc_id : 1;
-    }
-
-    let sampleBaiDang = await tx.baiDang.findFirst({
-      where: {
-        nguoi_dang_id: sellerId,
-        tieu_de: `Giao dịch B2B - ${nhuCau.ten_nong_san || 'Nông sản'}`,
-      },
-    });
-
-    if (!sampleBaiDang) {
-      sampleBaiDang = await tx.baiDang.create({
-        data: {
-          nguoi_dang_id: sellerId,
-          danhmuc_id: danhmucId,
-          tieu_de: `Giao dịch B2B - ${nhuCau.ten_nong_san || 'Nông sản'}`,
-          ten_nong_san: nhuCau.ten_nong_san || 'Nông sản',
-          mo_ta: `Bài đăng B2B tự động khởi tạo phục vụ giao dịch B2B từ Nhu Cầu Thu Mua: ${nhuCau.ten_nong_san}`,
-          don_vi_tinh: nhuCau.don_vi || 'kg',
-          so_luong_co: 0,
-          so_luong_con_lai: 0,
-          gia_per_kg: Number(giaDeXuat),
-          tinh_thanh: nhuCau.tinh_thanh_giao || 'Cần Thơ',
-          trang_thai: 'an',
-          images: nhuCau.hinh_anh ? [nhuCau.hinh_anh] : [],
-        },
-      });
-    }
-
-    let samplePhanLoai = await tx.phanLoaiSanPham.findFirst({
-      where: {
-        baidang_id: sampleBaiDang.baidang_id,
-        ten_phan_loai: 'Loại Chuẩn B2B',
-      },
-    });
-
-    if (!samplePhanLoai) {
-      samplePhanLoai = await tx.phanLoaiSanPham.create({
-        data: {
-          baidang_id: sampleBaiDang.baidang_id,
-          ten_phan_loai: 'Loại Chuẩn B2B',
-          so_luong_co: 0,
-          so_luong_con_lai: 0,
-          gia: Number(giaDeXuat),
-        },
-      });
-    }
-
-    const baiDangId = sampleBaiDang.baidang_id;
-    const phanLoaiId = samplePhanLoai.phanloai_id;
-
     const tongTien = Number(soLuong) * Number(giaDeXuat);
     const tienCoc = tongTien * 0.15; // 15% deposit
     const maDonHang = `B2B-NC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -119,7 +65,7 @@ export class BaoGiaService {
       data: {
         nguoi_mua_id: buyerId,
         nguoi_ban_id: sellerId,
-        baidang_id: baiDangId,
+        nhucau_id: nhuCau.nhucau_id,
         ma_don_hang: maDonHang,
         tong_tien: tongTien,
         tien_coc: tienCoc,
@@ -137,7 +83,7 @@ export class BaoGiaService {
     await tx.donHangChiTiet.create({
       data: {
         donhang_id: donHang.donhang_id,
-        phanloai_id: phanLoaiId,
+        ten_san_pham: nhuCau.ten_nong_san || 'Nông sản B2B',
         so_luong: soLuong,
         don_gia: giaDeXuat,
         thanh_tien: tongTien,

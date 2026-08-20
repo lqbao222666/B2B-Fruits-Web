@@ -22,11 +22,32 @@ const isCategoryOpen = ref(false);
 
 // Các biến trạng thái cho bộ lọc
 const filterProvince = ref<string>("");
+const filterRegion = ref<string>("");
+const filterMinQuantity = ref<number | null>(null);
 const filterPriceRange = ref<string>("");
 const filterStandard = ref<string>("");
 const filterMinRating = ref<number>(0);
 const minPriceInput = ref<number | null>(null);
 const maxPriceInput = ref<number | null>(null);
+
+const mienBacProvinces = [
+  'Hà Nội', 'Hải Phòng', 'Quảng Ninh', 'Bắc Giang', 'Sơn La', 'Lạng Sơn',
+  'Thái Nguyên', 'Hòa Bình', 'Hưng Yên', 'Hải Dương', 'Nam Định', 'Thái Bình',
+  'Ninh Bình', 'Hà Nam', 'Vĩnh Phúc', 'Phú Thọ', 'Lào Cai', 'Yên Bái',
+  'Cao Bằng', 'Hà Giang', 'Tuyên Quang', 'Bắc Kạn', 'Điện Biên', 'Lai Châu'
+];
+const mienTrungProvinces = [
+  'Thừa Thiên Huế', 'Huế', 'Đà Nẵng', 'Quảng Nam', 'Quảng Ngãi', 'Bình Định',
+  'Phú Yên', 'Khánh Hòa', 'Ninh Thuận', 'Bình Thuận', 'Kon Tum', 'Gia Lai',
+  'Đắc Lắc', 'Đắk Lắk', 'Đắk Nông', 'Lâm Đồng', 'Thanh Hóa', 'Nghệ An',
+  'Hà Tĩnh', 'Quảng Bình', 'Quảng Trị'
+];
+const mienNamProvinces = [
+  'Hồ Chí Minh', 'TP.HCM', 'TP HCM', 'Sài Gòn', 'TP. Hồ Chí Minh', 'Cần Thơ',
+  'Tiền Giang', 'Bến Tre', 'An Giang', 'Đồng Tháp', 'Vĩnh Long', 'Long An',
+  'Hậu Giang', 'Sóc Trăng', 'Bạc Liêu', 'Cà Mau', 'Kiên Giang', 'Trà Vinh',
+  'Bình Dương', 'Đồng Nai', 'Bà Rịa - Vũng Tàu', 'Bà Rịa', 'Tây Ninh', 'Bình Phước'
+];
 
 const setPresetPrice = (preset: string) => {
   filterPriceRange.value = preset;
@@ -150,9 +171,34 @@ const filteredAndSortedPosts = computed(() => {
     );
   }
 
+  // Lọc theo Vùng / Miền
+  if (filterRegion.value) {
+    let regionList: string[] = [];
+    if (filterRegion.value === "bac") regionList = mienBacProvinces;
+    else if (filterRegion.value === "trung") regionList = mienTrungProvinces;
+    else if (filterRegion.value === "nam") regionList = mienNamProvinces;
+
+    if (regionList.length > 0) {
+      list = list.filter((p) =>
+        regionList.some(
+          (prov) =>
+            p.tinh_thanh &&
+            p.tinh_thanh.toLowerCase().includes(prov.toLowerCase()),
+        ),
+      );
+    }
+  }
+
   // Lọc theo tỉnh thành
   if (filterProvince.value) {
     list = list.filter((p) => p.tinh_thanh === filterProvince.value);
+  }
+
+  // Lọc theo Sản lượng có sẵn tối thiểu
+  if (filterMinQuantity.value && filterMinQuantity.value > 0) {
+    list = list.filter(
+      (p) => Number(p.so_luong_con_lai || 0) >= Number(filterMinQuantity.value),
+    );
   }
 
   // Lọc theo giá
@@ -247,6 +293,8 @@ watch(
     searchQuery,
     sortOption,
     filterProvince,
+    filterRegion,
+    filterMinQuantity,
     filterPriceRange,
     filterStandard,
     filterMinRating,
@@ -272,6 +320,18 @@ watch(
         : "";
     }
 
+    if (route.query.region !== undefined) {
+      filterRegion.value = route.query.region
+        ? String(route.query.region)
+        : "";
+    }
+
+    if (route.query.minQuantity !== undefined) {
+      filterMinQuantity.value = route.query.minQuantity
+        ? Number(route.query.minQuantity)
+        : null;
+    }
+
     if (route.query.standard !== undefined) {
       filterStandard.value = route.query.standard
         ? String(route.query.standard)
@@ -295,6 +355,8 @@ watch(
 
 onMounted(() => {
   if (route.query.province) filterProvince.value = String(route.query.province);
+  if (route.query.region) filterRegion.value = String(route.query.region);
+  if (route.query.minQuantity) filterMinQuantity.value = Number(route.query.minQuantity);
   if (route.query.standard) filterStandard.value = String(route.query.standard);
   if (route.query.price) filterPriceRange.value = String(route.query.price);
   if (route.query.rating) filterMinRating.value = Number(route.query.rating);
@@ -674,16 +736,82 @@ const handleImageError = (e: Event) => {
                 </div>
               </div>
 
+              <!-- Vùng / Miền -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-sm text-slate-700 uppercase">
+                    Vùng / Miền
+                  </h4>
+                  <button
+                    v-if="filterRegion"
+                    @click="filterRegion = ''"
+                    class="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs font-semibold">
+                  <button
+                    type="button"
+                    @click="filterRegion = ''"
+                    class="py-2 px-3 rounded-xl border text-center transition"
+                    :class="
+                      filterRegion === ''
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    Tất cả
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterRegion = 'bac'"
+                    class="py-2 px-3 rounded-xl border text-center transition"
+                    :class="
+                      filterRegion === 'bac'
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    Miền Bắc
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterRegion = 'trung'"
+                    class="py-2 px-3 rounded-xl border text-center transition"
+                    :class="
+                      filterRegion === 'trung'
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    Miền Trung
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterRegion = 'nam'"
+                    class="py-2 px-3 rounded-xl border text-center transition"
+                    :class="
+                      filterRegion === 'nam'
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    Miền Nam
+                  </button>
+                </div>
+              </div>
+
               <!-- Khu vực -->
               <div class="space-y-3" v-if="availableProvinces.length > 0">
                 <h4 class="font-bold text-sm text-slate-700 uppercase">
-                  Khu vực
+                  Khu vực (Tỉnh/Thành)
                 </h4>
                 <select
                   v-model="filterProvince"
                   class="w-full bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-3 py-2.5 focus:border-[#2E7D32] focus:ring-2 focus:ring-[#2E7D32]/20 outline-none text-sm font-medium transition-all cursor-pointer"
                 >
-                  <option value="">Tất cả khu vực</option>
+                  <option value="">Tất cả tỉnh thành</option>
                   <option
                     v-for="prov in availableProvinces"
                     :key="prov"
@@ -692,6 +820,84 @@ const handleImageError = (e: Event) => {
                     {{ prov }}
                   </option>
                 </select>
+              </div>
+
+              <!-- Sản lượng có sẵn tối thiểu -->
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-sm text-slate-700 uppercase">
+                    Sản lượng có sẵn (Tối thiểu)
+                  </h4>
+                  <button
+                    v-if="filterMinQuantity"
+                    @click="filterMinQuantity = null"
+                    class="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    Bỏ chọn
+                  </button>
+                </div>
+                <div class="flex flex-wrap gap-1.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    @click="filterMinQuantity = null"
+                    class="px-2.5 py-1.5 rounded-lg border transition"
+                    :class="
+                      !filterMinQuantity
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    Tất cả
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterMinQuantity = 100"
+                    class="px-2.5 py-1.5 rounded-lg border transition"
+                    :class="
+                      filterMinQuantity === 100
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    ≥ 100 kg
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterMinQuantity = 500"
+                    class="px-2.5 py-1.5 rounded-lg border transition"
+                    :class="
+                      filterMinQuantity === 500
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    ≥ 500 kg
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterMinQuantity = 1000"
+                    class="px-2.5 py-1.5 rounded-lg border transition"
+                    :class="
+                      filterMinQuantity === 1000
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    ≥ 1 Tấn
+                  </button>
+                  <button
+                    type="button"
+                    @click="filterMinQuantity = 5000"
+                    class="px-2.5 py-1.5 rounded-lg border transition"
+                    :class="
+                      filterMinQuantity === 5000
+                        ? 'bg-[#2E7D32] text-white border-[#2E7D32] font-bold'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    "
+                  >
+                    ≥ 5 Tấn
+                  </button>
+                </div>
               </div>
 
               <!-- Tiêu chuẩn -->
@@ -907,32 +1113,33 @@ const handleImageError = (e: Event) => {
               <div class="flex flex-col flex-grow px-2">
                 <RouterLink
                   :to="`/product/${post.baidang_id}`"
-                  class="font-black text-slate-800 text-[15px] mb-1 line-clamp-2 leading-snug group-hover:text-[#2E7D32] transition-colors"
+                  class="font-black text-slate-800 text-[15px] mb-1 line-clamp-2 h-[42px] leading-snug group-hover:text-[#2E7D32] transition-colors"
                   :title="post.tieu_de"
                 >
                   {{ post.tieu_de }}
                 </RouterLink>
 
-                <div class="text-xs font-semibold text-slate-500 mb-2">
+                <div class="text-xs font-semibold text-slate-500 mb-2 truncate">
                   {{ post.ten_nong_san }}
                 </div>
 
-                <div
-                  v-if="post.tieuChuans && post.tieuChuans.length > 0"
-                  class="flex flex-wrap gap-1 mb-3"
-                >
-                  <span
-                    v-for="tc in post.tieuChuans"
-                    :key="tc.tieuchuan_id"
-                    class="inline-flex items-center gap-1 bg-[#e8f5e9] text-[#2E7D32] text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-md border border-[#2E7D32]/20"
-                  >
-                    <span
-                      v-if="tc.icon_url"
-                      class="material-symbols-outlined text-[10px]"
-                      >{{ tc.icon_url }}</span
+                <!-- Logo tiêu chuẩn chất lượng (xếp ngang, bỏ chữ, có tooltip) -->
+                <div class="h-7 flex items-center gap-1.5 mb-3">
+                  <template v-if="post.tieuChuans && post.tieuChuans.length > 0">
+                    <div
+                      v-for="tc in post.tieuChuans"
+                      :key="tc.tieuchuan_id"
+                      class="w-7 h-7 flex items-center justify-center bg-emerald-50 hover:bg-[#2E7D32] text-[#2E7D32] hover:text-white rounded-lg border border-emerald-200/80 shadow-2xs transition-all duration-200 cursor-help"
+                      :title="tc.ten_tieu_chuan"
                     >
-                    {{ tc.ten_tieu_chuan }}
-                  </span>
+                      <span
+                        v-if="tc.icon_url"
+                        class="material-symbols-outlined text-[16px]"
+                        >{{ tc.icon_url }}</span
+                      >
+                      <span v-else class="material-symbols-outlined text-[16px]">verified</span>
+                    </div>
+                  </template>
                 </div>
 
                 <div

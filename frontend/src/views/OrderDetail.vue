@@ -275,9 +275,32 @@ const handleReorder = async (order: any) => {
   router.push(`/product/${order.baidang_id}`);
 };
 
+const confirmingReadiness = ref(false);
+
 const handleReportIssue = (order: any) => {
   reportingOrder.value = order;
   showReportModal.value = true;
+};
+
+const handleConfirmReadiness = async (order: any) => {
+  if (
+    !confirm(
+      `Xác nhận vườn nông sản của bạn đã ĐỦ ĐIỀU KIỆN (số lượng & chất lượng) sẵn sàng để xe B2B đến lấy hàng?`
+    )
+  )
+    return;
+
+  confirmingReadiness.value = true;
+  try {
+    await api.patch(`/don-hang/${order.donhang_id}/xac-nhan-giao`);
+    notify.success("Đã xác nhận sẵn sàng giao hàng! Admin đã nhận được thông báo để điều xe B2B.");
+    fetchDetail();
+  } catch (error) {
+    notify.error("Lỗi khi xác nhận giao hàng. Vui lòng thử lại.");
+    console.error(error);
+  } finally {
+    confirmingReadiness.value = false;
+  }
 };
 
 const goToProduct = (productId: number | undefined) => {
@@ -321,15 +344,17 @@ onMounted(() => {
           <div class="bg-slate-50 p-6 md:p-8 border-b border-slate-200">
             <div class="flex flex-wrap justify-between items-center gap-4 mb-8">
               <div>
-                <h2
-                  class="font-black text-2xl text-slate-800 tracking-tight uppercase"
-                >
+                <h2 class="text-3xl font-black text-[#2E7D32]">
                   Mã đơn: #{{
                     selectedOrder.ma_don_hang || selectedOrder.donhang_id
                   }}
                 </h2>
                 <p class="text-slate-500 text-sm mt-1">
-                  {{ new Date(selectedOrder.ngay_tao).toLocaleString("vi-VN") }}
+                  Ngày đặt: {{ new Date(selectedOrder.ngay_tao).toLocaleString("vi-VN") }}
+                </p>
+                <p v-if="selectedOrder.ngay_giao_du_kien" class="text-emerald-700 font-bold text-sm mt-1">
+                  <span class="material-symbols-outlined text-[14px] align-middle mr-1">calendar_month</span>
+                  Dự kiến giao: {{ new Date(selectedOrder.ngay_giao_du_kien).toLocaleDateString("vi-VN") }}
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-3">
@@ -357,23 +382,8 @@ onMounted(() => {
                   {{ isCanceling ? "Đang hủy..." : "Hủy đơn hàng" }}
                 </button>
 
-                <!-- Nông dân -->
-                <button
-                  v-if="
-                    selectedOrder.trang_thai_don === 'cho_xac_nhan' &&
-                    selectedOrder.nguoi_ban_id === userId
-                  "
-                  @click="
-                    handleUpdateStatus(selectedOrder.donhang_id, 'da_xac_nhan')
-                  "
-                  :disabled="isUpdating"
-                  class="px-4 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1 disabled:opacity-50"
-                >
-                  <span class="material-symbols-outlined text-[16px]"
-                    >check_circle</span
-                  >
-                  Xác nhận đơn
-                </button>
+                <!-- Giao diện cũ: Nông dân xác nhận đơn đã được gỡ bỏ vì đơn hàng được tạo tự động từ thương lượng chốt kèo -->
+
 
                 <button
                   v-if="
@@ -443,21 +453,42 @@ onMounted(() => {
                   </button>
                 </div>
 
-                <button
+                <template
                   v-if="
                     selectedOrder.nguoi_ban_id === userId &&
                     !['hoan_thanh', 'da_huy'].includes(
                       selectedOrder.trang_thai_don,
                     )
                   "
-                  @click="handleReportIssue(selectedOrder)"
-                  class="px-4 py-2 bg-[#FFF8E1] border border-[#FFE082] text-[#FF8F00] hover:bg-[#FFECB3] rounded-xl text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1"
                 >
-                  <span class="material-symbols-outlined text-[16px]"
-                    >report_problem</span
+                  <div
+                    v-if="selectedOrder.nong_dan_xac_nhan_giao"
+                    class="px-4 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5"
                   >
-                  Báo cáo sự cố
-                </button>
+                    <span class="material-symbols-outlined text-[18px]">verified</span>
+                    Đã xác nhận đủ điều kiện giao
+                  </div>
+
+                  <button
+                    v-else-if="selectedOrder.doanh_nghiep_da_tt_coc"
+                    @click="handleConfirmReadiness(selectedOrder)"
+                    :disabled="confirmingReadiness"
+                    class="px-4 py-2 bg-[#2E7D32] hover:bg-[#1B5E20] text-white rounded-xl text-xs font-bold uppercase transition-all shadow-md flex items-center gap-1.5"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                    Xác nhận đủ điều kiện giao hàng
+                  </button>
+
+                  <button
+                    @click="handleReportIssue(selectedOrder)"
+                    class="px-4 py-2 bg-[#FFF8E1] border border-[#FFE082] text-[#FF8F00] hover:bg-[#FFECB3] rounded-xl text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1"
+                  >
+                    <span class="material-symbols-outlined text-[16px]"
+                      >report_problem</span
+                    >
+                    Báo cáo sự cố
+                  </button>
+                </template>
               </div>
             </div>
 
@@ -938,10 +969,10 @@ onMounted(() => {
     <Teleport to="body">
       <div
         v-if="showPaymentModal"
-        class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
+        class="fixed inset-0 z-[99999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
       >
         <div
-          class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+          class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[82vh] my-auto"
         >
           <div
             class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50"

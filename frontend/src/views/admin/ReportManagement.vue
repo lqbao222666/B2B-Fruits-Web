@@ -9,7 +9,6 @@ const selectedReport = ref<any>(null);
 const updateNote = ref("");
 const updateStatus = ref("");
 const updating = ref(false);
-const cancelingOrder = ref(false);
 
 const activeTab = ref("cho_xu_ly");
 const tabs = [
@@ -19,9 +18,42 @@ const tabs = [
   { id: "tu_choi", label: "Từ chối" },
 ];
 
+const searchKeyword = ref("");
+
 const filteredReports = computed(() => {
-  return reports.value.filter((r) => r.trang_thai === activeTab.value);
+  let list = reports.value.filter((r) => r.trang_thai === activeTab.value);
+  if (searchKeyword.value) {
+    const kw = searchKeyword.value.toLowerCase();
+    list = list.filter((r) => {
+      return (
+        (r.nguoiBaoCao?.full_name && r.nguoiBaoCao.full_name.toLowerCase().includes(kw)) ||
+        (r.nguoiBaoCao?.email && r.nguoiBaoCao.email.toLowerCase().includes(kw)) ||
+        (r.mo_ta && r.mo_ta.toLowerCase().includes(kw))
+      );
+    });
+  }
+  return list;
 });
+
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = 10;
+
+const totalPages = computed(() => {
+  return Math.ceil(filteredReports.value.length / itemsPerPage);
+});
+
+const paginatedReports = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  return filteredReports.value.slice(start, end);
+});
+
+const goToPage = (page: number) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
 
 const fetchReports = async () => {
   loading.value = true;
@@ -83,39 +115,6 @@ const handleUpdate = async () => {
     updating.value = false;
   }
 };
-
-// Extract Order ID if present in description "[Đơn hàng #123]"
-const getOrderId = (desc: string) => {
-  if (!desc) return null;
-  const match = desc.match(/\[Đơn hàng #(\d+)\]/);
-  return match ? Number(match[1]) : null;
-};
-
-const handleCancelOrder = async (orderId: number) => {
-  if (
-    !confirm(
-      `Bạn có chắc chắn muốn HỦY đơn hàng #${orderId} và tự động cập nhật báo cáo này thành "Đã xử lý"?`,
-    )
-  )
-    return;
-  cancelingOrder.value = true;
-  try {
-    // 1. Cancel the order
-    await api.patch(`/don-hang/${orderId}`, { trang_thai_don: "da_huy" });
-    // 2. Update the report
-    await api.patch(`/bao-cao/${selectedReport.value.baocao_id}`, {
-      trang_thai: "da_xu_ly",
-      ghi_chu_xu_ly: `Đã hủy đơn hàng #${orderId} theo yêu cầu sự cố.`,
-    });
-    notify.success(`Đã hủy đơn hàng #${orderId} và đánh dấu đã giải quyết!`);
-    selectedReport.value = null;
-    fetchReports();
-  } catch (error) {
-    notify.error("Lỗi khi hủy đơn hàng. Có thể đơn đã bị hủy.");
-  } finally {
-    cancelingOrder.value = false;
-  }
-};
 </script>
 
 <template>
@@ -129,17 +128,25 @@ const handleCancelOrder = async (orderId: number) => {
           Theo dõi và xử lý các sự cố đơn hàng từ hệ thống.
         </p>
       </div>
-      <button
-        @click="fetchReports"
-        class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
-      >
-        <span
-          class="material-symbols-outlined text-[20px]"
-          :class="{ 'animate-spin': loading }"
-          >refresh</span
+      <div class="flex items-center gap-3">
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="Tìm tên, email, nội dung..."
+          class="px-4 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 transition-all min-w-[240px]"
+        />
+        <button
+          @click="fetchReports"
+          class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition-colors shadow-sm"
         >
-        Làm mới
-      </button>
+          <span
+            class="material-symbols-outlined text-[20px]"
+            :class="{ 'animate-spin': loading }"
+            >refresh</span
+          >
+          Làm mới
+        </button>
+      </div>
     </div>
 
     <!-- Tabs -->
@@ -147,7 +154,7 @@ const handleCancelOrder = async (orderId: number) => {
       <button
         v-for="tab in tabs"
         :key="tab.id"
-        @click="activeTab = tab.id"
+        @click="activeTab = tab.id; currentPage = 1"
         class="pb-3 font-bold text-sm relative"
         :class="
           activeTab === tab.id
@@ -203,7 +210,7 @@ const handleCancelOrder = async (orderId: number) => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr
-            v-for="rp in filteredReports"
+            v-for="rp in paginatedReports"
             :key="rp.baocao_id"
             class="hover:bg-slate-50 transition-colors"
           >
@@ -247,6 +254,33 @@ const handleCancelOrder = async (orderId: number) => {
           </tr>
         </tbody>
       </table>
+
+      <!-- Pagination -->
+      <div v-if="totalPages > 1" class="flex justify-center items-center gap-2 p-4 border-t border-slate-100">
+        <button
+          @click="goToPage(currentPage - 1)"
+          :disabled="currentPage === 1"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &lt;
+        </button>
+        <button
+          v-for="page in totalPages"
+          :key="page"
+          @click="goToPage(page)"
+          class="w-8 h-8 flex items-center justify-center rounded-lg font-bold transition"
+          :class="currentPage === page ? 'bg-emerald-600 text-white border border-emerald-600' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'"
+        >
+          {{ page }}
+        </button>
+        <button
+          @click="goToPage(currentPage + 1)"
+          :disabled="currentPage === totalPages"
+          class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          &gt;
+        </button>
+      </div>
     </div>
 
     <!-- Detail Modal -->
@@ -299,12 +333,33 @@ const handleCancelOrder = async (orderId: number) => {
             </div>
           </div>
 
+          <!-- Hiển thị đề xuất xử lý từ Nông dân -->
+          <div v-if="selectedReport.de_xuat" class="p-4 rounded-2xl border bg-slate-50 space-y-2">
+            <p class="text-xs font-bold text-slate-500 uppercase">Đề xuất từ Nông dân:</p>
+            <div class="flex items-center gap-2">
+              <span
+                v-if="selectedReport.de_xuat === 'gia_han'"
+                class="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-xs"
+              >
+                <span class="material-symbols-outlined text-[16px]">event_repeat</span>
+                Gia hạn ngày giao: {{ selectedReport.ngay_giao_de_xuat ? new Date(selectedReport.ngay_giao_de_xuat).toLocaleDateString('vi-VN') : 'N/A' }}
+              </span>
+              <span
+                v-else-if="selectedReport.de_xuat === 'huy_hoan_tien'"
+                class="inline-flex items-center gap-1 px-3 py-1 bg-rose-100 text-rose-800 font-bold rounded-lg text-xs"
+              >
+                <span class="material-symbols-outlined text-[16px]">money_off</span>
+                Hủy đơn & Hoàn tiền cọc (Cộng hoàn số lượng về bài đăng)
+              </span>
+            </div>
+          </div>
+
           <div>
             <p class="text-sm font-bold text-slate-700 mb-2">
               Nội dung báo cáo:
             </p>
             <div
-              class="p-4 bg-orange-50 border border-orange-100 rounded-2xl text-slate-700 whitespace-pre-wrap"
+              class="p-4 bg-orange-50 border border-orange-100 rounded-2xl text-slate-700 whitespace-pre-wrap text-sm"
             >
               {{ selectedReport.mo_ta }}
             </div>
@@ -357,7 +412,7 @@ const handleCancelOrder = async (orderId: number) => {
                 >
                 <select
                   v-model="updateStatus"
-                  class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] outline-none"
+                  class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] outline-none text-sm font-medium"
                 >
                   <option v-for="tab in tabs" :key="tab.id" :value="tab.id">
                     {{ tab.label }}
@@ -367,13 +422,13 @@ const handleCancelOrder = async (orderId: number) => {
 
               <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1.5"
-                  >Ghi chú xử lý (Nội bộ)</label
+                  >Ghi chú xử lý (Nội bộ / Gửi phản hồi)</label
                 >
                 <textarea
                   v-model="updateNote"
                   rows="3"
-                  class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] outline-none placeholder:text-slate-400"
-                  placeholder="Nhập ghi chú xử lý..."
+                  class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] outline-none placeholder:text-slate-400 text-sm"
+                  placeholder="Nhập lý do duyệt hoặc ghi chú xử lý..."
                 ></textarea>
               </div>
             </div>
@@ -382,24 +437,20 @@ const handleCancelOrder = async (orderId: number) => {
 
         <!-- Modal Footer -->
         <div
-          class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between"
+          class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3"
         >
-          <div>
+          <div class="flex gap-2">
             <button
               v-if="
-                getOrderId(selectedReport.mo_ta) &&
+                selectedReport.donhang_id &&
                 selectedReport.trang_thai !== 'da_xu_ly'
               "
-              @click="handleCancelOrder(getOrderId(selectedReport.mo_ta)!)"
-              :disabled="cancelingOrder"
-              class="px-5 py-2.5 rounded-xl text-sm font-bold bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors flex items-center gap-2"
+              @click="updateStatus = 'da_xu_ly'; handleUpdate()"
+              :disabled="updating"
+              class="px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md flex items-center gap-1.5"
             >
-              <span class="material-symbols-outlined text-[18px]">cancel</span>
-              {{
-                cancelingOrder
-                  ? "Đang hủy..."
-                  : `Hủy Đơn Hàng #${getOrderId(selectedReport.mo_ta)}`
-              }}
+              <span class="material-symbols-outlined text-[16px]">check_circle</span>
+              Duyệt giải quyết theo đề xuất
             </button>
           </div>
           <div class="flex gap-3">

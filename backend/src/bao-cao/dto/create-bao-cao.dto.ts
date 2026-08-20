@@ -1,5 +1,5 @@
-import { IsString, IsInt, IsOptional, IsEnum, IsArray } from 'class-validator';
-import { LoaiBaoCao, TrangThaiBaoCao } from '@prisma/client';
+import { IsString, IsInt, IsOptional, IsEnum, IsArray, IsDateString } from 'class-validator';
+import { LoaiBaoCao, TrangThaiBaoCao, DeXuatBaoCao } from '@prisma/client';
 
 export class CreateBaoCaoDto {
   @IsInt()
@@ -13,6 +13,10 @@ export class CreateBaoCaoDto {
   @IsInt()
   baidang_id?: number;
 
+  @IsOptional()
+  @IsInt()
+  donhang_id?: number;
+
   @IsEnum(LoaiBaoCao)
   loai: LoaiBaoCao;
 
@@ -22,6 +26,14 @@ export class CreateBaoCaoDto {
   @IsOptional()
   @IsArray()
   bang_chung?: any[]; // mảng URL ảnh/video
+
+  @IsOptional()
+  @IsEnum(DeXuatBaoCao)
+  de_xuat?: DeXuatBaoCao;
+
+  @IsOptional()
+  @IsDateString()
+  ngay_giao_de_xuat?: string;
 
   @IsOptional()
   @IsEnum(TrangThaiBaoCao)

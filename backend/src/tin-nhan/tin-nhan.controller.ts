@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Query,
   ParseIntPipe,
   UseGuards,
   UseInterceptors,
@@ -87,6 +88,20 @@ export class TinNhanController {
   @Get('search-user/:phone')
   async searchUserByPhone(@Param('phone') phone: string) {
     return this.tinNhanService.searchUserByPhone(phone);
+  }
+
+  @Get('search-users')
+  async searchUsers(
+    @Query('q') query: string,
+    @GetUser() currentUser: any,
+  ) {
+    const currentUserId = currentUser?.user_id || currentUser?.id;
+    return this.tinNhanService.searchUsers(query, currentUserId);
+  }
+
+  @Get('user-detail/:userId')
+  async getUserDetail(@Param('userId', ParseIntPipe) userId: number) {
+    return this.tinNhanService.getUserDetail(userId);
   }
 
   @Get('conversation/:partnerId')

@@ -182,11 +182,9 @@ const handleReportIssue = (order: any) => {
 
 const isUpdating = ref(false);
 const showPaymentModal = ref(false);
-const paymentStep = ref(0);
+const paymentMethod = ref("momo");
 const selectedOrderId = ref<number | null>(null);
 const selectedOrderTotal = ref<number>(0);
-let paymentTimeout1: any = null;
-let paymentTimeout2: any = null;
 
 const handleUpdateStatus = async (
   orderId: number,
@@ -209,21 +207,8 @@ const handleUpdateStatus = async (
 const handleFinalPayment = (order: any) => {
   selectedOrderId.value = order.donhang_id;
   selectedOrderTotal.value = order.tong_tien - (order.tien_coc || 0);
+  paymentMethod.value = "momo";
   showPaymentModal.value = true;
-  paymentStep.value = 0;
-
-  paymentTimeout1 = setTimeout(() => {
-    paymentStep.value = 1;
-    paymentTimeout2 = setTimeout(() => {
-      executeFinalPayment();
-    }, 1000);
-  }, 3000);
-};
-
-const cancelPayment = () => {
-  clearTimeout(paymentTimeout1);
-  clearTimeout(paymentTimeout2);
-  showPaymentModal.value = false;
 };
 
 const executeFinalPayment = async () => {
@@ -232,6 +217,7 @@ const executeFinalPayment = async () => {
   try {
     await api.patch(`/don-hang/${selectedOrderId.value}`, {
       trang_thai_don: "hoan_thanh",
+      phuong_thuc_tt: paymentMethod.value,
     });
     notify.success("Đã xác nhận nhận hàng và thanh toán thành công!");
     showPaymentModal.value = false;
@@ -670,99 +656,150 @@ onMounted(() => {
       <!-- Modal Thanh Toán TT 85% -->
       <div
         v-if="showPaymentModal"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        class="fixed inset-0 z-[99999] flex items-center justify-center p-4 pt-24 pb-12 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fadeIn"
       >
         <div
-          class="bg-white rounded-[2rem] p-8 max-w-md w-full mx-4 shadow-2xl relative overflow-hidden text-center"
+          class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[82vh] my-auto"
         >
-          <button
-            v-if="paymentStep === 0"
-            @click="cancelPayment"
-            class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 bg-slate-100 p-2 rounded-full transition-colors"
-          >
-            <span class="material-symbols-outlined text-lg">close</span>
-          </button>
-
-          <h3 class="text-2xl font-black text-slate-800 mb-6 font-sans">
-            Thanh toán 85% còn lại
-          </h3>
-          <p class="text-slate-600 text-sm mb-4">
-            Mở app Ngân hàng hoặc MoMo để quét mã QR dưới đây
-          </p>
-
           <div
-            class="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100 flex flex-col items-center justify-center mb-6 relative"
+            class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50"
           >
-            <div
-              v-if="paymentStep === 0"
-              class="w-48 h-48 bg-white border-4 border-[#2E7D32] p-2 rounded-xl"
+            <h3 class="font-black text-lg text-slate-800 tracking-tight">
+              Thanh Toán 85% Còn Lại
+            </h3>
+            <button
+              @click="showPaymentModal = false"
+              class="text-slate-400 hover:text-slate-700 transition p-1.5 bg-white rounded-full shadow-sm"
             >
-              <img
-                src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=B2B_NONG_SAN_MOCK_PAYMENT_85"
-                alt="QR Code"
-                class="w-full h-full object-contain mix-blend-multiply"
-              />
+              <span class="material-symbols-outlined block text-[20px]"
+                >close</span
+              >
+            </button>
+          </div>
+
+          <div class="p-6 space-y-5 flex-1 overflow-y-auto">
+            <p class="text-sm text-slate-600 font-medium">
+              Vui lòng chọn phương thức thanh toán và quét mã QR để hoàn tất số tiền
+              <strong class="text-emerald-700 text-lg ml-1">{{
+                formatCurrency(selectedOrderTotal)
+              }}</strong
+              >.
+            </p>
+
+            <!-- Nút chọn phương thức thanh toán -->
+            <div class="flex gap-3">
+              <button
+                @click="paymentMethod = 'momo'"
+                :class="[
+                  'flex-1 py-3 border-2 rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition',
+                  paymentMethod === 'momo'
+                    ? 'bg-[#a50064] text-white border-[#a50064] shadow-md shadow-pink-200'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-[#a50064] hover:text-[#a50064] hover:bg-pink-50',
+                ]"
+              >
+                <span class="material-symbols-outlined text-[24px]"
+                  >account_balance_wallet</span
+                >
+                MoMo
+              </button>
+              <button
+                @click="paymentMethod = 'chuyen_khoan'"
+                :class="[
+                  'flex-1 py-3 border-2 rounded-2xl font-bold flex flex-col items-center justify-center gap-1.5 transition',
+                  paymentMethod === 'chuyen_khoan'
+                    ? 'bg-[#0052cc] text-white border-[#0052cc] shadow-md shadow-blue-200'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-[#0052cc] hover:text-[#0052cc] hover:bg-blue-50',
+                ]"
+              >
+                <span class="material-symbols-outlined text-[24px]"
+                  >qr_code_scanner</span
+                >
+                VietQR
+              </button>
             </div>
-            <!-- Scanning overlay -->
+
+            <!-- Khu vực QR code giả lập -->
             <div
-              v-if="paymentStep === 0"
-              class="absolute inset-0 flex items-center justify-center flex-col gap-3"
+              :class="[
+                'border-2 border-dashed rounded-3xl p-6 flex flex-col items-center justify-center text-center transition-colors',
+                paymentMethod === 'momo'
+                  ? 'bg-pink-50/50 border-[#a50064]/30'
+                  : 'bg-blue-50/50 border-[#0052cc]/30',
+              ]"
             >
               <div
-                class="w-full h-1 bg-[#2E7D32]/50 animate-[scan_2s_ease-in-out_infinite] shadow-[0_0_15px_#2E7D32]"
-              ></div>
-            </div>
+                class="relative bg-white p-3.5 rounded-2xl shadow-sm transition-all"
+                :class="
+                  paymentMethod === 'momo'
+                    ? 'ring-4 ring-[#a50064]/10'
+                    : 'ring-4 ring-[#0052cc]/10'
+                "
+              >
+                <img
+                  src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg"
+                  class="w-40 h-40 opacity-90 mix-blend-multiply"
+                  alt="QR Code"
+                />
 
-            <!-- Success State -->
-            <div
-              v-if="paymentStep === 1"
-              class="w-48 h-48 bg-white rounded-xl flex flex-col items-center justify-center text-[#2E7D32]"
+                <!-- Logo ở giữa QR -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <div
+                    class="bg-white p-2 rounded-xl shadow-md border border-slate-100 flex items-center justify-center"
+                  >
+                    <img
+                      v-if="paymentMethod === 'momo'"
+                      src="https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png"
+                      class="w-8 h-8 object-contain"
+                      alt="MoMo Logo"
+                    />
+                    <img
+                      v-else
+                      src="https://upload.wikimedia.org/wikipedia/commons/c/ca/VietQR_Logo.svg"
+                      class="w-12 h-6 object-contain"
+                      alt="VietQR Logo"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-[13px] text-slate-500 mt-4 font-medium px-2">
+                Mở ứng dụng
+                <strong
+                  :class="
+                    paymentMethod === 'momo'
+                      ? 'text-[#a50064]'
+                      : 'text-[#0052cc]'
+                  "
+                  >{{
+                    paymentMethod === "momo" ? "MoMo" : "Ngân hàng"
+                  }}</strong
+                >
+                để quét mã.<br />
+                <span class="opacity-70 font-normal mt-1 block"
+                  >(Đây là giao diện giả lập Demo)</span
+                >
+              </p>
+            </div>
+          </div>
+
+          <div class="p-5 bg-slate-50 border-t border-slate-100 flex gap-3">
+            <button
+              @click="showPaymentModal = false"
+              class="flex-1 py-3.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl transition"
             >
-              <span class="material-symbols-outlined text-7xl mb-2"
+              Hủy bỏ
+            </button>
+            <button
+              @click="executeFinalPayment"
+              :disabled="isUpdating"
+              class="flex-[2] py-3.5 bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-black uppercase tracking-wider rounded-xl transition shadow-lg shadow-green-200 flex items-center justify-center gap-2"
+            >
+              <span class="material-symbols-outlined" v-if="!isUpdating"
                 >check_circle</span
               >
-              <span class="font-bold">Đã nhận thanh toán!</span>
-            </div>
+              {{ isUpdating ? "Đang xử lý..." : "Xác nhận chuyển khoản" }}
+            </button>
           </div>
-
-          <div
-            class="bg-[#e8f5e9] p-4 rounded-xl border border-[#2E7D32]/20 mb-6"
-          >
-            <div
-              class="flex justify-between items-center text-base font-black text-slate-900 pt-2"
-            >
-              <span>Số tiền cần thanh toán:</span>
-              <span class="text-xl text-[#d00000]">{{
-                formatCurrency(selectedOrderTotal)
-              }}</span>
-            </div>
-          </div>
-
-          <p
-            v-if="paymentStep === 0"
-            class="text-xs text-slate-500 flex items-center justify-center gap-1"
-          >
-            <span class="material-symbols-outlined text-[14px] animate-spin"
-              >sync</span
-            >
-            Đang chờ quét mã thanh toán...
-          </p>
-
-          <button
-            v-if="paymentStep === 0"
-            @click="cancelPayment"
-            class="mt-6 px-6 py-2.5 rounded-xl text-sm font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all w-full"
-          >
-            Hủy thanh toán
-          </button>
-
-          <p
-            v-if="paymentStep === 1"
-            class="text-sm font-bold text-[#2E7D32] flex items-center justify-center gap-1"
-          >
-            <span class="material-symbols-outlined text-[18px]">verified</span>
-            Đang hoàn tất đơn hàng...
-          </p>
         </div>
       </div>
     </div>

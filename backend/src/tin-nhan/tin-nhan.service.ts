@@ -50,4 +50,12 @@ export class TinNhanService {
   async searchUserByPhone(phone: string) {
     return this.repository.searchUserByPhone(phone);
   }
+
+  async searchUsers(query: string, currentUserId?: number) {
+    return this.repository.searchUsers(query, currentUserId);
+  }
+
+  async getUserDetail(userId: number) {
+    return this.repository.getUserDetail(userId);
+  }
 }

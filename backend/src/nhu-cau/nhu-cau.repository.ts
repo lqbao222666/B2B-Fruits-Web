@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateNhuCauDto } from './dto/create-nhu-cau.dto';
 import { UpdateNhuCauDto } from './dto/update-nhu-cau.dto';
+import { getProvincesByRegion } from '../common/regions';
 
 @Injectable()
 export class NhuCauRepository {
@@ -36,6 +37,13 @@ export class NhuCauRepository {
     tinh_thanh_giao?: string;
     danhmuc_id?: number;
     trang_thai?: string;
+    mien?: string;
+    so_luong_min?: number;
+    gia_min?: number;
+    gia_max?: number;
+    yeu_cau_chung_nhan?: string;
+    cho_thuong_luong?: boolean;
+    sort?: string;
   }) {
     const where: any = {};
     if (filters?.trang_thai && filters.trang_thai !== 'all') {
@@ -45,16 +53,69 @@ export class NhuCauRepository {
     }
 
     if (filters?.ten_nong_san) {
-      where.ten_nong_san = {
-        contains: filters.ten_nong_san,
-        mode: 'insensitive',
-      };
+      where.OR = [
+        {
+          ten_nong_san: {
+            contains: filters.ten_nong_san,
+            mode: 'insensitive',
+          },
+        },
+        {
+          mo_ta: {
+            contains: filters.ten_nong_san,
+            mode: 'insensitive',
+          },
+        },
+        {
+          doanhNghiep: {
+            ten_cong_ty: {
+              contains: filters.ten_nong_san,
+              mode: 'insensitive',
+            },
+          },
+        },
+      ];
     }
     if (filters?.tinh_thanh_giao) {
       where.tinh_thanh_giao = filters.tinh_thanh_giao;
     }
+    if (filters?.mien) {
+      const regionProvinces = getProvincesByRegion(filters.mien);
+      if (regionProvinces.length > 0) {
+        where.tinh_thanh_giao = { in: regionProvinces };
+      }
+    }
     if (filters?.danhmuc_id) {
       where.danhmuc_id = filters.danhmuc_id;
+    }
+    if (filters?.so_luong_min !== undefined) {
+      where.so_luong_can = { gte: filters.so_luong_min };
+    }
+    if (filters?.gia_min !== undefined || filters?.gia_max !== undefined) {
+      where.gia_tham_khao = {
+        ...(filters.gia_min !== undefined && { gte: filters.gia_min }),
+        ...(filters.gia_max !== undefined && { lte: filters.gia_max }),
+      };
+    }
+    if (filters?.yeu_cau_chung_nhan) {
+      where.yeu_cau_chung_nhan = {
+        contains: filters.yeu_cau_chung_nhan,
+        mode: 'insensitive',
+      };
+    }
+    if (filters?.cho_thuong_luong !== undefined) {
+      where.cho_thuong_luong = filters.cho_thuong_luong;
+    }
+
+    let orderBy: any = { created_at: 'desc' };
+    if (filters?.sort === 'qty_desc') {
+      orderBy = { so_luong_can: 'desc' };
+    } else if (filters?.sort === 'qty_asc') {
+      orderBy = { so_luong_can: 'asc' };
+    } else if (filters?.sort === 'price_desc') {
+      orderBy = { gia_tham_khao: 'desc' };
+    } else if (filters?.sort === 'price_asc') {
+      orderBy = { gia_tham_khao: 'asc' };
     }
 
     return this.prisma.nhuCauThuMua.findMany({
@@ -68,7 +129,7 @@ export class NhuCauRepository {
         danhMuc: true,
         _count: { select: { baoGiaList: true } },
       },
-      orderBy: { created_at: 'desc' },
+      orderBy,
     });
   }
 

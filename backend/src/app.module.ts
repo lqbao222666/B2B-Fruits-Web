@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -6,7 +7,7 @@ import { UsersModule } from './users/users.module';
 import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
-import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaModule } from './prisma/prisma.module';
 import { DanhMucModule } from './danh-muc/danh-muc.module';
 import { DoanhNghiepModule } from './doanh-nghiep/doanh-nghiep.module';
 import { NongDanModule } from './nong-dan/nong-dan.module';
@@ -27,6 +28,7 @@ import { ChungLoaiModule } from './chung-loai/chung-loai.module';
 import { EmailModule } from './email/email.module';
 import { TheoDoiModule } from './theo-doi/theo-doi.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { ThuongLuongModule } from './thuong-luong/thuong-luong.module';
 
 @Module({
   imports: [
@@ -37,6 +39,7 @@ import { GatewayModule } from './gateway/gateway.module';
       rootPath: join(__dirname, '..', '..', 'public'), // Serve files from /public
       serveRoot: '/', // Base path will be /uploads if file is in /public/uploads
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -60,6 +63,7 @@ import { GatewayModule } from './gateway/gateway.module';
     EmailModule,
     TheoDoiModule,
     GatewayModule,
+    ThuongLuongModule,
   ],
   controllers: [AppController],
   providers: [AppService],

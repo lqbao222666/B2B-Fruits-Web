@@ -82,6 +82,12 @@ const handleNotificationClick = async (tb: any) => {
     } else {
       router.push("/quan-ly-nhu-cau");
     }
+  } else if (tb.ref_type === "thuong_luong_bai_dang") {
+    if (tb.ref_id) {
+      router.push(`/thuong-luong/${tb.ref_id}`);
+    } else {
+      router.push("/quan-ly-thuong-luong");
+    }
   } else if (tb.loai === "bai_dang" && tb.ref_id) {
     router.push(`/products/${tb.ref_id}`);
   } else if (tb.loai === "hang_moi" && tb.ref_id) {
@@ -268,36 +274,35 @@ const formatTime = (timeStr: string) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  color: var(--text-color);
-  background: none;
+  gap: 3px;
+  padding: 6px 10px;
+  border-radius: 10px;
   border: none;
+  background: transparent;
   cursor: pointer;
-  padding: 4px;
-  transition: all 0.2s;
+  text-decoration: none;
+  color: #455a64;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  font-family: "Inter", sans-serif;
 }
 .action-btn:hover {
-  color: var(--primary-color);
+  background: #f1f8e9;
+  color: #2e7d32;
 }
 .action-btn-icon {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-color);
-  border-radius: 50%;
-  transition: all 0.3s ease;
-}
-.action-btn:hover .action-btn-icon {
-  background: #e8f5e9;
-  transform: translateY(-2px);
 }
 .badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -4px;
+  right: -4px;
   background: #ff4757;
   color: white;
   font-size: 10px;
@@ -312,8 +317,15 @@ const formatTime = (timeStr: string) => {
   border: 2px solid white;
 }
 .action-btn-label {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 1300px) {
+  .action-btn-label {
+    display: none;
+  }
 }
 
 .icon-circle {

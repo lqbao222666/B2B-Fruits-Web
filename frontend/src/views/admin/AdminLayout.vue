@@ -3,6 +3,7 @@ import { RouterView, RouterLink, useRoute, useRouter } from "vue-router";
 import { ref } from "vue";
 import auth from "@/service/auth.ts";
 import { notify } from "@/utils/notifier.ts";
+import ThongBaoDropdown from "@/components/ThongBaoDropdown.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -169,7 +170,8 @@ const handleLogout = () => {
             }}
           </h2>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 1rem;">
+          <ThongBaoDropdown v-if="user && (user.user_id || user.id)" :userId="user.user_id || user.id" />
           <div class="admin-profile">
             <div class="admin-info">
               <span class="admin-role">Admin</span>

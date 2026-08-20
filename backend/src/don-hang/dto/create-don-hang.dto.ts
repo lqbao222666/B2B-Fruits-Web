@@ -64,6 +64,9 @@ export class CreateDonHangDto {
   ma_xac_nhan?: string;
 
   @IsOptional()
+  nong_dan_xac_nhan_giao?: boolean;
+
+  @IsOptional()
   @IsEnum(PhuongThucThanhToan)
   phuong_thuc_tt?: PhuongThucThanhToan;
 

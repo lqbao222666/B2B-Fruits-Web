@@ -6,11 +6,13 @@ import {
   IsBoolean,
   IsDateString,
   IsArray,
+  IsEnum,
   IsPositive,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { LoaiCungCap } from '@prisma/client';
 import { PhanLoaiDto } from './phan-loai.dto';
 
 export class CreateBaiDangDto {
@@ -87,6 +89,14 @@ export class CreateBaiDangDto {
   @IsOptional()
   @IsBoolean()
   is_seasonal?: boolean;
+
+  @IsOptional()
+  @IsEnum(LoaiCungCap)
+  loai_cung_cap?: LoaiCungCap;
+
+  @IsOptional()
+  @IsDateString()
+  ngay_bat_dau_cung_cap?: string;
 
   @IsOptional()
   @IsArray()

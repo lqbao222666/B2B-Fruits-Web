@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { BaiDang } from "@/service/baidang.ts";
 import api from "@/service/api.ts";
 import { notify } from "@/utils/notifier.ts";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { extractProvinceName } from "@/utils/provinceHelper";
 
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import iconUrl from "leaflet/dist/images/marker-icon.png";
@@ -109,11 +110,36 @@ const form = ref({
   danhmuc_id: "",
   don_vi_tinh: "kg",
   tinh_thanh: "",
+  dia_chi_lay_hang: "",
   mo_ta: "",
   latitude: null as number | null,
   longitude: null as number | null,
   tieu_chuan_ids: [] as number[],
+  trang_thai: "dang_ban",
+  loai_cung_cap: "lay_hang_ngay",
+  ngay_bat_dau_cung_cap: new Date().toISOString().split("T")[0],
 });
+
+const isPostStoppedOrSoldOut = computed(() => {
+  const isZeroStock =
+    phanLoais.value.length > 0 &&
+    phanLoais.value.every((pl) => Number(pl.so_luong_con_lai || 0) <= 0);
+  return (
+    form.value.trang_thai === "an" ||
+    form.value.trang_thai === "da_ban" ||
+    isZeroStock
+  );
+});
+
+const restoreStockForReSell = () => {
+  phanLoais.value.forEach((pl) => {
+    pl.so_luong_con_lai = Number(pl.so_luong_co || 0);
+  });
+  form.value.trang_thai = "dang_ban";
+  notify.success(
+    "Đã khôi phục số lượng còn lại về sản lượng ban đầu. Vui lòng nhấn 'Lưu Thay Đổi' để hoàn tất!"
+  );
+};
 
 const phanLoais = ref<any[]>([]);
 
@@ -223,7 +249,10 @@ watch(selectedSavedLocation, (val) => {
     const loc = savedLocations.value.find((l) => l.id == val);
     if (loc) {
       moveToLocation(Number(loc.latitude), Number(loc.longitude));
-      form.value.tinh_thanh = loc.dia_chi || form.value.tinh_thanh;
+      if (loc.dia_chi) {
+        form.value.tinh_thanh = extractProvinceName(loc.dia_chi);
+        form.value.dia_chi_lay_hang = loc.dia_chi;
+      }
     }
   }
 });
@@ -261,12 +290,18 @@ onMounted(async () => {
       danhmuc_id: post.danhmuc_id ? String(post.danhmuc_id) : "",
       don_vi_tinh: post.don_vi_tinh || "kg",
       tinh_thanh: post.tinh_thanh || "",
+      dia_chi_lay_hang: post.dia_chi_lay_hang || "",
       mo_ta: post.mo_ta || "",
       latitude: post.latitude ? Number(post.latitude) : null,
       longitude: post.longitude ? Number(post.longitude) : null,
       tieu_chuan_ids: post.tieuChuans
         ? post.tieuChuans.map((tc: any) => Number(tc.tieuchuan_id))
         : [],
+      trang_thai: post.trang_thai || "dang_ban",
+      loai_cung_cap: post.loai_cung_cap || "lay_hang_ngay",
+      ngay_bat_dau_cung_cap: post.ngay_bat_dau_cung_cap
+        ? new Date(post.ngay_bat_dau_cung_cap).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
     };
 
     if (post.phanLoais && post.phanLoais.length > 0) {
@@ -443,7 +478,11 @@ const handleSuggestPrice = async (index: number) => {
     const res = await api.post("/ai/suggest-price", payload);
     if (res.data && res.data.gia_goi_y) {
       phanLoais.value[index].gia = res.data.gia_goi_y;
-      notify.success("Đã điền giá gợi ý từ AI!");
+      if (res.data.khoang_gia) {
+        notify.success(`Gợi ý: ${res.data.gia_goi_y.toLocaleString('vi-VN')} VNĐ (Khoảng giá: ${res.data.khoang_gia})`);
+      } else {
+        notify.success("Đã điền giá gợi ý từ AI!");
+      }
     }
   } catch (err) {
     console.error("Lỗi khi gợi ý giá:", err);
@@ -464,18 +503,13 @@ const handleSubmit = async () => {
       isValidPhanLoai = false;
     tongSoLuong += Number(pl.so_luong_co);
 
-    let diff =
-      Number(pl.so_luong_co) -
-      (pl.original_so_luong_co || Number(pl.so_luong_co));
-    let baseConLai =
-      pl.original_so_luong_con_lai !== undefined &&
-      pl.original_so_luong_con_lai !== null
-        ? Number(pl.original_so_luong_con_lai)
+    let conLai =
+      pl.so_luong_con_lai !== null && pl.so_luong_con_lai !== undefined
+        ? Number(pl.so_luong_con_lai)
         : Number(pl.so_luong_co);
-    let calculatedConLai = baseConLai + diff;
-    if (calculatedConLai < 0) calculatedConLai = 0;
+    if (isNaN(conLai) || conLai < 0) conLai = 0;
 
-    tongSoLuongConLai += calculatedConLai;
+    tongSoLuongConLai += conLai;
     if (Number(pl.gia) < minGia) minGia = Number(pl.gia);
   });
 
@@ -496,6 +530,11 @@ const handleSubmit = async () => {
     const uploadedImageObjects = await uploadImages();
     const finalImages = [...existingImages.value, ...uploadedImageObjects];
 
+    let targetTrangThai = form.value.trang_thai || "dang_ban";
+    if (targetTrangThai === "dang_ban" && tongSoLuongConLai <= 0) {
+      targetTrangThai = "da_ban";
+    }
+
     const payload = {
       tieu_de: form.value.tieu_de,
       ten_nong_san: form.value.ten_nong_san,
@@ -506,27 +545,25 @@ const handleSubmit = async () => {
       gia_per_kg: minGia === Infinity ? 0 : minGia,
       tinh_thanh: form.value.tinh_thanh,
       mo_ta: form.value.mo_ta,
+      trang_thai: targetTrangThai,
       latitude: form.value.latitude ? Number(form.value.latitude) : null,
       longitude: form.value.longitude ? Number(form.value.longitude) : null,
       tieu_chuan_ids: form.value.tieu_chuan_ids,
+      loai_cung_cap: form.value.loai_cung_cap,
+      ngay_bat_dau_cung_cap: form.value.loai_cung_cap === 'du_kien' ? form.value.ngay_bat_dau_cung_cap : new Date().toISOString().split('T')[0],
       images: finalImages,
       phan_loais: phanLoais.value.map((pl) => {
-        let diff =
-          Number(pl.so_luong_co) -
-          (pl.original_so_luong_co || Number(pl.so_luong_co));
-        let baseConLai =
-          pl.original_so_luong_con_lai !== undefined &&
-          pl.original_so_luong_con_lai !== null
-            ? Number(pl.original_so_luong_con_lai)
+        let conLai =
+          pl.so_luong_con_lai !== null && pl.so_luong_con_lai !== undefined
+            ? Number(pl.so_luong_con_lai)
             : Number(pl.so_luong_co);
-        let calculatedConLai = baseConLai + diff;
-        if (calculatedConLai < 0) calculatedConLai = 0;
+        if (isNaN(conLai) || conLai < 0) conLai = 0;
 
         return {
           ten_phan_loai: pl.ten_phan_loai,
           gia: Number(pl.gia),
           so_luong_co: Number(pl.so_luong_co),
-          so_luong_con_lai: calculatedConLai,
+          so_luong_con_lai: conLai,
         };
       }),
     };
@@ -640,7 +677,7 @@ const getFullUrl = (path: any) => {
               />
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
                 <label class="block text-sm font-bold text-slate-700 mb-1.5"
                   >Tên nông sản <span class="text-red-500">*</span></label
@@ -672,12 +709,109 @@ const getFullUrl = (path: any) => {
                   </option>
                 </select>
               </div>
+
+              <div>
+                <label class="block text-sm font-bold text-slate-700 mb-1.5"
+                  >Trạng thái bài đăng <span class="text-red-500">*</span></label
+                >
+                <select
+                  v-model="form.trang_thai"
+                  required
+                  class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] focus:ring-4 focus:ring-[#2E7D32]/10 outline-none transition-all font-medium text-slate-800 cursor-pointer"
+                >
+                  <option value="dang_ban">🟢 Đang bán (Hiển thị)</option>
+                  <option value="an">🔴 Ngừng cung cấp / Ẩn bài</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Loại hình cung cấp bài đăng -->
+            <div class="p-4 bg-emerald-50/60 rounded-xl border border-emerald-100 space-y-3">
+              <label class="block text-sm font-bold text-slate-800">
+                Loại hình cung cấp bài đăng <span class="text-red-500">*</span>
+              </label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label
+                  :class="[
+                    'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
+                    form.loai_cung_cap === 'lay_hang_ngay'
+                      ? 'bg-white border-[#2E7D32] shadow-sm text-[#2E7D32] font-bold'
+                      : 'bg-white/50 border-slate-200 text-slate-600 hover:bg-white'
+                  ]"
+                >
+                  <input
+                    type="radio"
+                    value="lay_hang_ngay"
+                    v-model="form.loai_cung_cap"
+                    class="accent-[#2E7D32]"
+                  />
+                  <div>
+                    <div class="text-sm">Lấy hàng ngay</div>
+                    <div class="text-xs text-slate-500 font-normal">Sẵn sàng giao hàng thời điểm hiện tại</div>
+                  </div>
+                </label>
+
+                <label
+                  :class="[
+                    'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
+                    form.loai_cung_cap === 'du_kien'
+                      ? 'bg-white border-[#2E7D32] shadow-sm text-[#2E7D32] font-bold'
+                      : 'bg-white/50 border-slate-200 text-slate-600 hover:bg-white'
+                  ]"
+                >
+                  <input
+                    type="radio"
+                    value="du_kien"
+                    v-model="form.loai_cung_cap"
+                    class="accent-[#2E7D32]"
+                  />
+                  <div>
+                    <div class="text-sm">Dự kiến cung cấp</div>
+                    <div class="text-xs text-slate-500 font-normal">Nông sản chờ thu hoạch theo vụ/đợt</div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Ngày bắt đầu cung cấp dự kiến -->
+              <div v-if="form.loai_cung_cap === 'du_kien'" class="pt-2">
+                <label class="block text-xs font-bold text-slate-700 mb-1">
+                  Ngày bắt đầu sẵn sàng giao hàng dự kiến <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  v-model="form.ngay_bat_dau_cung_cap"
+                  required
+                  class="w-full sm:w-1/2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] outline-none text-sm font-medium text-slate-800"
+                />
+              </div>
             </div>
           </div>
         </section>
 
         <!-- PHÂN LOẠI & SẢN LƯỢNG -->
         <section>
+          <!-- Warning banner if post is stopped or sold out -->
+          <div
+            v-if="isPostStoppedOrSoldOut"
+            class="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-amber-800 text-sm font-medium shadow-sm"
+          >
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-amber-600">warning</span>
+              <span>
+                Bài đăng hiện đang ở trạng thái <strong>Ngừng cung cấp / Ẩn / Hết hàng (Còn 0 kg)</strong>.
+                Nếu bạn muốn mở bán lại, nhấp vào nút bên cạnh để khôi phục kho!
+              </span>
+            </div>
+            <button
+              type="button"
+              @click="restoreStockForReSell"
+              class="whitespace-nowrap px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-sm transition-colors text-xs flex items-center justify-center gap-1.5"
+            >
+              <span class="material-symbols-outlined text-[16px]">refresh</span>
+              Khôi phục kho để bán lại
+            </button>
+          </div>
+
           <div class="flex items-center justify-between mb-4">
             <h2
               class="text-lg font-bold text-slate-800 flex items-center gap-2"
@@ -712,12 +846,15 @@ const getFullUrl = (path: any) => {
                 <span class="material-symbols-outlined text-[18px]">close</span>
               </button>
 
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                <!-- Col 1: Tên phân loại -->
                 <div class="md:col-span-1">
-                  <label
-                    class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-                    >Tên Phân Loại <span class="text-red-500">*</span></label
-                  >
+                  <div class="h-6 flex items-center justify-between mb-1.5">
+                    <label
+                      class="block text-xs font-bold text-slate-500 uppercase tracking-wider"
+                      >Tên Phân Loại <span class="text-red-500">*</span></label
+                    >
+                  </div>
                   <input
                     v-model="pl.ten_phan_loai"
                     type="text"
@@ -726,12 +863,16 @@ const getFullUrl = (path: any) => {
                     class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] focus:ring-4 focus:ring-[#2E7D32]/10 outline-none transition-all font-medium text-slate-800"
                   />
                 </div>
+
+                <!-- Col 2: Sản lượng ban đầu -->
                 <div class="md:col-span-1">
-                  <label
-                    class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-                    >Sản Lượng ({{ form.don_vi_tinh }})
-                    <span class="text-red-500">*</span></label
-                  >
+                  <div class="h-6 flex items-center justify-between mb-1.5">
+                    <label
+                      class="block text-xs font-bold text-slate-500 uppercase tracking-wider"
+                      >Sản Lượng Ban Đầu ({{ form.don_vi_tinh }})
+                      <span class="text-red-500">*</span></label
+                    >
+                  </div>
                   <input
                     v-model="pl.so_luong_co"
                     type="number"
@@ -741,8 +882,29 @@ const getFullUrl = (path: any) => {
                     class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] focus:ring-4 focus:ring-[#2E7D32]/10 outline-none transition-all font-medium text-slate-800"
                   />
                 </div>
+
+                <!-- Col 3: Còn lại bán -->
                 <div class="md:col-span-1">
-                  <div class="flex items-center justify-between mb-1.5">
+                  <div class="h-6 flex items-center justify-between mb-1.5">
+                    <label
+                      class="block text-xs font-bold text-slate-500 uppercase tracking-wider"
+                      >Còn Lại Bán ({{ form.don_vi_tinh }})
+                      <span class="text-red-500">*</span></label
+                    >
+                  </div>
+                  <input
+                    v-model="pl.so_luong_con_lai"
+                    type="number"
+                    min="0"
+                    required
+                    placeholder="VD: 100"
+                    class="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:border-[#2E7D32] focus:ring-4 focus:ring-[#2E7D32]/10 outline-none transition-all font-bold text-[#2E7D32]"
+                  />
+                </div>
+
+                <!-- Col 4: Giá bán -->
+                <div class="md:col-span-1">
+                  <div class="h-6 flex items-center justify-between mb-1.5">
                     <label
                       class="block text-xs font-bold text-slate-500 uppercase tracking-wider"
                       >Giá Bán (VNĐ) <span class="text-red-500">*</span></label
@@ -751,7 +913,7 @@ const getFullUrl = (path: any) => {
                       type="button"
                       @click="handleSuggestPrice(index)"
                       :disabled="suggestingPriceIdx === index"
-                      class="text-[10px] font-bold text-[#2E7D32] hover:text-[#1B5E20] flex items-center gap-1 disabled:opacity-50 transition-colors"
+                      class="text-[11px] font-bold text-[#2E7D32] hover:text-[#1B5E20] flex items-center gap-1 disabled:opacity-50 transition-colors bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200"
                     >
                       <span
                         v-if="suggestingPriceIdx === index"
@@ -861,20 +1023,30 @@ const getFullUrl = (path: any) => {
                 <label class="block text-sm font-bold text-slate-700"
                   >Tọa độ lấy hàng (Bản đồ)</label
                 >
-                <select
-                  v-if="savedLocations.length > 0"
-                  v-model="selectedSavedLocation"
-                  class="text-xs p-2 border border-slate-200 rounded-lg outline-none bg-white cursor-pointer w-48 text-ellipsis overflow-hidden whitespace-nowrap"
-                >
-                  <option value="">-- Chọn tọa độ đã lưu --</option>
-                  <option
-                    v-for="loc in savedLocations"
-                    :key="loc.id"
-                    :value="loc.id"
+                <div class="flex items-center gap-2">
+                  <select
+                    v-if="savedLocations.length > 0"
+                    v-model="selectedSavedLocation"
+                    class="text-xs p-2 border border-emerald-300 rounded-lg outline-none bg-emerald-50/50 cursor-pointer max-w-[220px] text-ellipsis overflow-hidden whitespace-nowrap font-medium"
                   >
-                    {{ loc.ten_goi }}
-                  </option>
-                </select>
+                    <option value="">-- Chọn kho / vị trí đã lưu --</option>
+                    <option
+                      v-for="loc in savedLocations"
+                      :key="loc.id"
+                      :value="loc.id"
+                    >
+                      📍 {{ loc.ten_goi }}
+                    </option>
+                  </select>
+                  <router-link
+                    to="/profile"
+                    class="text-[11px] text-[#2E7D32] hover:underline font-bold flex items-center gap-1"
+                    title="Quản lý danh sách kho đã lưu trong hồ sơ"
+                  >
+                    <span class="material-symbols-outlined text-xs">add_location_alt</span>
+                    {{ savedLocations.length > 0 ? 'Quản lý kho' : '+ Thêm kho đã lưu' }}
+                  </router-link>
+                </div>
               </div>
 
               <!-- Search box -->

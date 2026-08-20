@@ -143,4 +143,9 @@ export class DonHangService {
     await this.repository.findOne(id);
     return this.repository.remove(id);
   }
+
+  async nongDanXacNhanGiao(id: number, userId: number) {
+    await this.repository.findOne(id);
+    return this.repository.nongDanXacNhanGiao(id, userId);
+  }
 }

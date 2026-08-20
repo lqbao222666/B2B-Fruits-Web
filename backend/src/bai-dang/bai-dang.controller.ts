@@ -51,7 +51,7 @@ export class BaiDangController {
   /// Nông dân tải ảnh lên
   @Post('upload')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.admin, Role.nong_dan)
+  @Roles(Role.admin, Role.nong_dan, Role.doanh_nghiep)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
